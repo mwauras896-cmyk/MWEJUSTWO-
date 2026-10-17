@@ -24,7 +24,7 @@ let db = { members: [], payments: [], cases: [] };
 async function loadDb() {
   if (USE_SB) { const rows = await sb('mwe_store?key=eq.main&select=value'); if (rows && rows[0]) db = rows[0].value; console.log('Data loaded from Supabase'); }
   else { console.log('WARNING: SUPABASE_URL / SUPABASE_KEY not set. Using a local file; data is LOST when Render redeploys.'); if (fs.existsSync(FILE)) db = JSON.parse(fs.readFileSync(FILE)); }
-  db.members = db.members || []; db.payments = db.payments || []; db.cases = db.cases || []; db.certNames = db.certNames || []; db.leaders = db.leaders || DEFAULT_LEADERS;
+  db.members = db.members || []; db.payments = db.payments || []; db.cases = db.cases || []; db.certNames = db.certNames || []; db.posts = db.posts || []; db.ledger = db.ledger || []; db.postImgs = db.postImgs || []; db.leaders = db.leaders || DEFAULT_LEADERS;
 }
 let dirty = false, saving = false, timer = null;
 async function flush() {
@@ -45,7 +45,7 @@ const clean = s => String(s || '').trim().replace(/[<>]/g, '').slice(0, 80);
 const sessions = new Map();
 const admin = (...roles) => (req, res, next) => {
   const x = sessions.get(req.headers['x-admin-token']);
-  if (x && x.exp > Date.now() && roles.includes(x.role)) { req.role = x.role; return next(); }
+  if (x && x.exp > Date.now() && roles.includes(x.role)) { req.role = x.role; req.sess = x; return next(); }
   res.status(401).json({ error: 'Not allowed for your role' });
 };
 const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -149,8 +149,87 @@ app.post('/api/member/summary', (req, res) => {
     paidTotal: mine.filter(p => p.status === 'Paid').reduce((t, p) => t + p.amount, 0), pending: mine.filter(p => p.status !== 'Paid' && p.status !== 'Failed').length,
     payments: mine.slice(0, 30).map(p => ({ amount: p.amount, status: p.status, caseTitle: p.caseTitle || 'General', code: p.code, created: p.created })) });
 });
+
+// --- Leaders: own login (phone + PIN set by the Chairman), posting of minutes, notices and accounts.
+const canPost = l => ({ minutes: /secretary/i.test(l.role) && !/organi[sz]ing/i.test(l.role), accounts: /treasurer/i.test(l.role), notice: true });
+const zoneOf = l => /thiba/i.test(l.role) ? 'Thiba' : /murinduko/i.test(l.role) ? 'Murinduko' : 'All';
+const leaderFails = new Map();
+app.post('/api/leader/login', (req, res) => {
+  const phone = normPhone(req.body.phone), f = leaderFails.get(phone);
+  if (f && f.until > Date.now()) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
+  const i = db.leaders.findIndex(l => normPhone(l.phone) === phone), l = db.leaders[i];
+  if (!l || !l.pinHash || !checkPin(req.body.pin, l.pinHash)) { const n = ((f && f.n) || 0) + 1; leaderFails.set(phone, { n: n >= 5 ? 0 : n, until: n >= 5 ? Date.now() + 600000 : 0 }); return res.status(403).json({ error: 'Wrong phone number or PIN. If you have no PIN yet, ask the Chairman.' }); }
+  leaderFails.delete(phone);
+  const t = crypto.randomBytes(24).toString('hex'); sessions.set(t, { role: 'leader', idx: i, exp: Date.now() + 2 * 3600e3 });
+  res.json({ token: t, name: l.name, title: l.role, can: canPost(l) });
+});
+async function saveImage(dataUrl) {
+  const mt = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || '')); if (!mt) return '';
+  const buf = Buffer.from(mt[2], 'base64'); if (buf.length > 1500000) throw new Error('Image too large. Try a smaller photo.');
+  const f = crypto.randomUUID() + (mt[1] === 'png' ? '.png' : '.jpg');
+  if (USE_SB) await sb('mwe_files', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ name: f, mime: 'image/' + (mt[1] === 'png' ? 'png' : 'jpeg'), data: mt[2] }) });
+  else { fs.mkdirSync(CERT_DIR, { recursive: true }); fs.writeFileSync(path.join(CERT_DIR, f), buf); }
+  db.postImgs.push(f); return f;
+}
+async function sendImage(res, f) {
+  if (USE_SB) { const r = await sb('mwe_files?name=eq.' + f + '&select=mime,data'); if (!r || !r[0]) return res.sendStatus(404); return res.type(r[0].mime).send(Buffer.from(r[0].data, 'base64')); }
+  res.sendFile(path.join(CERT_DIR, f));
+}
+const today = () => new Date().toISOString().slice(0, 10), okDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : today();
+app.post('/api/leader/post', admin('leader'), async (req, res) => {
+  try {
+    const l = db.leaders[req.sess.idx], type = req.body.type;
+    if (!['minutes', 'notice'].includes(type) || !canPost(l)[type]) return res.status(403).json({ error: 'Your role cannot post this.' });
+    const title = clean(req.body.title), body = String(req.body.body || '').trim().slice(0, 6000);
+    if (title.length < 3) return res.status(400).json({ error: 'Enter a title.' });
+    if (body.length < 3 && !req.body.image) return res.status(400).json({ error: 'Write the details or attach a photo.' });
+    const image = await saveImage(req.body.image);
+    db.posts.push({ id: crypto.randomUUID(), type, title, body, date: okDate(req.body.date), image, author: l.name, role: l.role, zone: type === 'notice' ? zoneOf(l) : 'All', created: new Date().toISOString() });
+    save(); res.json({ ok: true });
+  } catch (e) { console.error('POST FAILED:', e.message); res.status(400).json({ error: e.message.startsWith('Image') ? e.message : 'Could not post. Try again.' }); }
+});
+app.get('/api/leader/posts', admin('leader'), (req, res) => { const l = db.leaders[req.sess.idx]; res.json(db.posts.filter(p => p.author === l.name).slice(-20).reverse().map(({ image, ...p }) => ({ ...p, hasImage: !!image }))); });
+const ledgerView = () => { const e = db.ledger.slice().sort((a, b) => (b.date + b.created).localeCompare(a.date + a.created)); const t = k => e.filter(x => x.kind === k).reduce((s, x) => s + x.amount, 0); return { totalIn: t('in'), totalOut: t('out'), balance: t('in') - t('out'), entries: e.slice(0, 200) }; };
+app.get('/api/leader/ledger', admin('leader'), (req, res) => canPost(db.leaders[req.sess.idx]).accounts ? res.json(ledgerView()) : res.status(403).json({ error: 'Treasurer only.' }));
+app.post('/api/leader/ledger', admin('leader'), (req, res) => {
+  const l = db.leaders[req.sess.idx]; if (!canPost(l).accounts) return res.status(403).json({ error: 'Only the Treasurer posts accounts.' });
+  const kind = ['in', 'out'].includes(req.body.kind) ? req.body.kind : null, amount = Math.round(Number(req.body.amount)), desc = clean(req.body.desc);
+  if (!kind) return res.status(400).json({ error: 'Choose money in or money out.' });
+  if (!(amount >= 1 && amount <= 10000000)) return res.status(400).json({ error: 'Enter a valid amount.' });
+  if (desc.length < 3) return res.status(400).json({ error: 'Describe the entry.' });
+  db.ledger.push({ id: crypto.randomUUID(), date: okDate(req.body.date), kind, amount, desc, author: l.name, created: new Date().toISOString(), signed: false }); save(); res.json({ ok: true });
+});
+// Entries are never deleted: a mistake is reversed by a new opposite entry.
+app.post('/api/leader/ledger/:id/reverse', admin('leader'), (req, res) => {
+  const l = db.leaders[req.sess.idx]; if (!canPost(l).accounts) return res.status(403).json({ error: 'Only the Treasurer can do this.' });
+  const e = db.ledger.find(x => x.id === req.params.id); if (!e || e.reversed || e.corrects) return res.status(400).json({ error: 'This entry cannot be reversed.' });
+  e.reversed = true;
+  db.ledger.push({ id: crypto.randomUUID(), date: today(), kind: e.kind === 'in' ? 'out' : 'in', amount: e.amount, desc: 'Reversal of: ' + e.desc, corrects: e.id, author: l.name, created: new Date().toISOString(), signed: false }); save(); res.json({ ok: true });
+});
+app.get('/api/admin/leaders', admin('chairman'), (_, res) => res.json(db.leaders.map((l, i) => ({ i, name: l.name, role: l.role, hasPin: !!l.pinHash }))));
+app.post('/api/admin/leaders/:i/setpin', admin('chairman'), (req, res) => {
+  const l = db.leaders[Number(req.params.i)]; if (!l) return res.sendStatus(404);
+  if (!/^\d{4,6}$/.test(String(req.body.pin || ''))) return res.status(400).json({ error: 'PIN must be 4 to 6 digits.' });
+  l.pinHash = hashPin(req.body.pin); save(); res.json({ ok: true });
+});
+app.get('/api/admin/ledger', admin('chairman'), (_, res) => res.json(ledgerView()));
+app.post('/api/admin/ledger/:id/signoff', admin('chairman'), (req, res) => { const e = db.ledger.find(x => x.id === req.params.id); if (!e) return res.sendStatus(404); e.signed = true; e.signedAt = new Date().toISOString(); save(); res.json({ ok: true }); });
+
+// --- What members see: notices, minutes (own zone + all) and the accounts (everyone).
+app.post('/api/feed', (req, res) => {
+  const m = memberAuth(req, res); if (!m) return;
+  const posts = db.posts.filter(p => p.zone === 'All' || p.zone === m.zone).slice(-80).reverse().map(({ image, ...p }) => ({ ...p, hasImage: !!image }));
+  res.json({ posts, ledger: ledgerView() });
+});
+app.post('/api/feed/image/:id', async (req, res) => {
+  const m = memberAuth(req, res); if (!m) return;
+  const p = db.posts.find(x => x.id === req.params.id && (x.zone === 'All' || x.zone === m.zone));
+  if (!p || !p.image || !db.postImgs.includes(p.image)) return res.sendStatus(404);
+  try { await sendImage(res, p.image); } catch (e) { console.error(e.message); res.sendStatus(500); }
+});
+
 // --- Leadership list: visible to logged-in members only (phone + PIN).
-app.post('/api/leaders', (req, res) => { const m = memberAuth(req, res); if (m) res.json(db.leaders); });
+app.post('/api/leaders', (req, res) => { const m = memberAuth(req, res); if (m) res.json(db.leaders.map(({ name, role, phone }) => ({ name, role, phone }))); });
 
 // --- Welfare cases: levy per case; late remittance (after the due date) attracts 50% interest on the principal.
 const PAYOUTS = { bereavement_member: ['Bereavement: principal member', 1000], bereavement_family: ['Bereavement: nuclear family member', 500], bereavement_parent: ['Bereavement: parent of principal member', 300], wedding: ['Wedding / dowry / parental blessing', 1000], other: ['Other case', 0] };
