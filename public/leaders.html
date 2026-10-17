@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#004d40"><title>Leaders' Desk · MWEJUSTWO</title>
+<style>
+:root{--g:#004d40;--gold:#d4af37}*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#eef1f0;color:#222}
+header{background:var(--g);color:#fff;padding:18px;border-bottom:5px solid var(--gold)}header h1{margin:0;font-size:1.3rem;color:var(--gold)}header a{color:#fff}
+main{max-width:640px;margin:0 auto;padding:14px}.card{background:#fff;border-radius:14px;padding:14px;margin-bottom:14px}
+h2{margin:0 0 8px;color:var(--g);font-size:1.1rem}label{display:block;font-weight:600;font-size:.9rem;margin-top:8px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;font-size:1rem;margin-top:4px;font-family:inherit}
+button{width:100%;margin-top:10px;padding:12px;font-weight:700;font-size:1rem;color:var(--gold);background:var(--g);border:2px solid var(--gold);border-radius:10px}
+button.sm{width:auto;padding:6px 10px;font-size:.85rem;margin:4px 4px 0 0}button.dark{background:#333}button:disabled{opacity:.6}
+.row{border-bottom:1px solid #eee;padding:8px 0;font-size:.92rem}.row small{color:#666}.in{color:#2e7d32;font-weight:700}.out{color:#c62828;font-weight:700}
+.sum{display:flex;gap:8px;text-align:center}.sum div{flex:1;background:#f3f6f5;border-radius:10px;padding:8px}.sum b{display:block;font-size:1.05rem}
+#toast{position:fixed;left:12px;right:12px;bottom:14px;padding:12px;border-radius:10px;color:#fff;display:none;max-width:616px;margin:auto}
+</style></head><body>
+<header><h1>Leaders' Desk</h1><a href="/">← Back to the app</a></header><main>
+
+<div class="card" id="login"><h2>Leader login</h2><p style="margin:0;color:#555;font-size:.9rem">Use your phone number and the PIN the Chairman gave you.</p>
+<label>Phone number</label><input id="lp" type="tel" placeholder="07XXXXXXXX"><label>PIN</label><input id="lpin" type="password" inputmode="numeric" maxlength="6">
+<button id="lbtn">Login</button></div>
+
+<div id="desk" hidden>
+<div class="card"><b id="who"></b><br><small id="title"></small><button class="sm dark" id="out" style="margin-top:8px">Log out</button></div>
+
+<div class="card"><h2>Post a notice</h2><label>Title</label><input id="nt" placeholder="e.g. AGM date announced"><label>Details</label><textarea id="nb" rows="4"></textarea>
+<label>Photo (optional)</label><input id="ni" type="file" accept="image/*"><button id="nbtn">Post notice</button></div>
+
+<div class="card" id="mcard" hidden><h2>Post minutes</h2><label>Title</label><input id="mt" placeholder="e.g. Committee meeting minutes"><label>Meeting date</label><input id="md" type="date">
+<label>Minutes</label><textarea id="mb" rows="6"></textarea><label>Photo of signed minutes (optional)</label><input id="mi" type="file" accept="image/*"><button id="mbtn">Post minutes</button></div>
+
+<div class="card" id="acard" hidden><h2>Accounts</h2><div class="sum"><div>In<b id="ti">0</b></div><div>Out<b id="to">0</b></div><div>Balance<b id="tb">0</b></div></div>
+<label>Type</label><select id="ak"><option value="in">Money in</option><option value="out">Money out</option></select><label>Amount (KES)</label><input id="aa" type="number"><label>Description</label><input id="ad" placeholder="e.g. Levy collected, Mr Kamau case"><label>Date</label><input id="adt" type="date">
+<button id="abtn">Add entry</button><div id="al" style="margin-top:10px"></div><small>Entries are never deleted. To fix a mistake, tap Reverse, then add the correct entry.</small></div>
+
+<div class="card"><h2>My recent posts</h2><div id="mine"></div></div></div>
+
+<div class="card"><h2>Chairman tools</h2><p style="margin:0;color:#555;font-size:.9rem">Set leaders' PINs and sign off the accounts. Use the Chairman's PIN.</p>
+<div id="clock"><input id="cpin" type="password" inputmode="numeric" placeholder="Chairman PIN"><button id="cbtn" class="dark">Open Chairman tools</button></div>
+<div id="ct" hidden><b>Leaders</b><div id="ll"></div><b style="display:block;margin-top:12px">Accounts to sign off</b><div id="cl"></div></div></div>
+</main><div id="toast"></div>
+<script>
+const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let tok = null, ctok = null, can = {};
+function toast(m, ok = true) { const t = $('toast'); t.textContent = m; t.style.background = ok ? '#2e7d32' : '#c62828'; t.style.display = 'block'; clearTimeout(t._h); t._h = setTimeout(() => t.style.display = 'none', 4500); }
+async function api(p, o = {}, t = tok) { const r = await fetch(p, { ...o, headers: { 'Content-Type': 'application/json', ...(t ? { 'x-admin-token': t } : {}) } }); const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.error || 'Request failed'); return d; }
+const post = (p, b, t) => api(p, { method: 'POST', body: JSON.stringify(b) }, t);
+async function act(b, f) { b.disabled = true; try { await f(); } catch (e) { toast(e.message, false); } b.disabled = false; }
+const money = n => 'KES ' + Number(n).toLocaleString();
+function photo(inp) { return new Promise(res => { const f = inp.files[0]; if (!f) return res(''); const img = new Image(); img.onload = () => { const s = Math.min(1, 1400 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = img.width * s; c.height = img.height * s; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.7)); }; img.onerror = () => res(''); img.src = URL.createObjectURL(f); }); }
+
+$('lbtn').onclick = e => act(e.target, async () => { const d = await post('/api/leader/login', { phone: $('lp').value, pin: $('lpin').value }, null); tok = d.token; can = d.can; $('who').textContent = d.name; $('title').textContent = d.title; $('lpin').value = ''; $('login').hidden = true; $('desk').hidden = false; $('mcard').hidden = !can.minutes; $('acard').hidden = !can.accounts; $('md').value = $('adt').value = new Date().toISOString().slice(0, 10); loadMine(); if (can.accounts) loadLedger(); });
+$('out').onclick = () => { tok = null; $('desk').hidden = true; $('login').hidden = false; };
+async function loadMine() { const p = await api('/api/leader/posts'); $('mine').innerHTML = p.map(x => `<div class="row"><b>${esc(x.title)}</b><br><small>${esc(x.type === 'minutes' ? 'Minutes' : 'Notice')} · ${esc(x.date)}</small></div>`).join('') || '<small>Nothing posted yet.</small>'; }
+$('nbtn').onclick = e => act(e.target, async () => { await post('/api/leader/post', { type: 'notice', title: $('nt').value, body: $('nb').value, image: await photo($('ni')) }); $('nt').value = $('nb').value = $('ni').value = ''; toast('Notice posted.'); loadMine(); });
+$('mbtn').onclick = e => act(e.target, async () => { await post('/api/leader/post', { type: 'minutes', title: $('mt').value, date: $('md').value, body: $('mb').value, image: await photo($('mi')) }); $('mt').value = $('mb').value = $('mi').value = ''; toast('Minutes posted.'); loadMine(); });
+async function loadLedger() { const d = await api('/api/leader/ledger'); $('ti').textContent = money(d.totalIn); $('to').textContent = money(d.totalOut); $('tb').textContent = money(d.balance);
+  $('al').innerHTML = d.entries.map(x => `<div class="row" style="${x.reversed ? 'opacity:.5;text-decoration:line-through' : ''}"><span class="${x.kind}">${x.kind === 'in' ? '+' : '−'} ${money(x.amount)}</span> ${esc(x.desc)}<br><small>${esc(x.date)}${x.signed ? ' · ✔ signed by Chairman' : ''}</small>${!x.reversed && !x.corrects ? ` <button class="sm dark" onclick="rev('${x.id}')">Reverse</button>` : ''}</div>`).join('') || '<small>No entries yet.</small>'; }
+$('abtn').onclick = e => act(e.target, async () => { await post('/api/leader/ledger', { kind: $('ak').value, amount: $('aa').value, desc: $('ad').value, date: $('adt').value }); $('aa').value = $('ad').value = ''; toast('Entry added.'); loadLedger(); });
+window.rev = id => confirm('Reverse this entry? A correcting entry will be added.') && post(`/api/leader/ledger/${id}/reverse`, {}).then(() => { toast('Reversed.'); loadLedger(); }).catch(e => toast(e.message, false));
+
+$('cbtn').onclick = e => act(e.target, async () => { const d = await post('/api/admin/login', { pin: $('cpin').value }, null); if (d.role !== 'chairman') throw new Error('Chairman PIN only.'); ctok = d.token; $('cpin').value = ''; $('clock').hidden = true; $('ct').hidden = false; loadChair(); });
+async function loadChair() {
+  const L = await api('/api/admin/leaders', {}, ctok), d = await api('/api/admin/ledger', {}, ctok);
+  $('ll').innerHTML = L.map(l => `<div class="row"><b>${esc(l.name)}</b> <small>${esc(l.role)} · ${l.hasPin ? 'PIN set' : 'no PIN yet'}</small><br><button class="sm" onclick="setPin(${l.i})">${l.hasPin ? 'Change PIN' : 'Set PIN'}</button></div>`).join('');
+  $('cl').innerHTML = d.entries.filter(x => !x.signed).map(x => `<div class="row"><span class="${x.kind}">${x.kind === 'in' ? '+' : '−'} ${money(x.amount)}</span> ${esc(x.desc)}<br><small>${esc(x.date)}</small> <button class="sm" onclick="sign('${x.id}')">Sign off</button></div>`).join('') || '<small>Everything is signed off.</small>';
+}
+window.setPin = i => { const p = prompt('New PIN for this leader (4 to 6 digits). Give it to them privately.'); if (p) post(`/api/admin/leaders/${i}/setpin`, { pin: p }, ctok).then(() => { toast('PIN saved.'); loadChair(); }).catch(e => toast(e.message, false)); };
+window.sign = id => post(`/api/admin/ledger/${id}/signoff`, {}, ctok).then(loadChair).catch(e => toast(e.message, false));
+</script></body></html>
