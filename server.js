@@ -4,10 +4,39 @@ const app = express(); app.use(cors()); app.use(express.json({ limit: '4mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- storage (JSON file). On Render free tier disk resets: attach a disk or swap for Supabase/MongoDB.
-const FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');
-let db = fs.existsSync(FILE) ? JSON.parse(fs.readFileSync(FILE)) : { members: [], payments: [], cases: [] };
-db.cases = db.cases || [];
-const save = () => fs.writeFileSync(FILE, JSON.stringify(db, null, 2));
+const FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');   // only used if Supabase is not configured
+const ZONES = ['Thiba', 'Murinduko'];
+const DEFAULT_LEADERS = [
+  { name: 'Samuel Mwangi', role: 'Chairman', phone: '0728065957' }, { name: 'Ellah Muthoni', role: 'Vice Chairperson', phone: '0704710176' },
+  { name: 'Dennis Bundi', role: 'Secretary', phone: '0717829021' }, { name: 'Sarah Muringo', role: 'Vice Secretary', phone: '0707422653' },
+  { name: 'Edwin Njagi', role: 'Treasurer', phone: '0704436780' }, { name: 'Bonface Ndambiri', role: 'Organizing Secretary', phone: '0728508108' },
+  { name: 'Jane Muriithi', role: 'Thiba Zone Representative', phone: '0729668617' }, { name: 'Antony Ndumbi', role: 'Murinduko Zone Representative', phone: '0748793533' },
+  { name: 'Charles Kariuki', role: 'PLWD Representative', phone: '0751577974' }];
+
+// --- storage: Supabase (permanent) via REST. Whole app data is one JSON row in mwe_store; certificate photos go in mwe_files.
+const SB_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), SB_KEY = process.env.SUPABASE_KEY || '', USE_SB = !!(SB_URL && SB_KEY);
+const sb = async (p, opts = {}) => {
+  const r = await fetch(SB_URL + '/rest/v1/' + p, { ...opts, headers: { apikey: SB_KEY, ...(SB_KEY.startsWith('eyJ') ? { Authorization: 'Bearer ' + SB_KEY } : {}), 'Content-Type': 'application/json', ...(opts.headers || {}) } });
+  if (!r.ok) throw new Error('Supabase ' + r.status + ' ' + (await r.text()).slice(0, 200));
+  return r.json().catch(() => null);
+};
+let db = { members: [], payments: [], cases: [] };
+async function loadDb() {
+  if (USE_SB) { const rows = await sb('mwe_store?key=eq.main&select=value'); if (rows && rows[0]) db = rows[0].value; console.log('Data loaded from Supabase'); }
+  else { console.log('WARNING: SUPABASE_URL / SUPABASE_KEY not set. Using a local file; data is LOST when Render redeploys.'); if (fs.existsSync(FILE)) db = JSON.parse(fs.readFileSync(FILE)); }
+  db.members = db.members || []; db.payments = db.payments || []; db.cases = db.cases || []; db.certNames = db.certNames || []; db.leaders = db.leaders || DEFAULT_LEADERS;
+}
+let dirty = false, saving = false, timer = null;
+async function flush() {
+  if (saving) return; saving = true;
+  try { while (dirty) { dirty = false;
+    if (USE_SB) await sb('mwe_store', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ key: 'main', value: db }) });
+    else fs.writeFileSync(FILE, JSON.stringify(db, null, 2)); } }
+  catch (e) { console.error('SAVE FAILED:', e.message); dirty = true; setTimeout(flush, 5000); }
+  saving = false;
+}
+const save = () => { dirty = true; clearTimeout(timer); timer = setTimeout(flush, 300); };
+process.on('SIGTERM', async () => { clearTimeout(timer); while (saving) await new Promise(r => setTimeout(r, 100)); await flush(); process.exit(0); });
 
 const normPhone = p => { p = String(p || '').replace(/\D/g, ''); if (/^0[17]\d{8}$/.test(p)) return '254' + p.slice(1); if (/^254[17]\d{8}$/.test(p)) return p; return null; };
 const clean = s => String(s || '').trim().replace(/[<>]/g, '').slice(0, 80);
@@ -30,12 +59,14 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 // --- members
-app.get('/api/health', (_, res) => res.json({ ok: true }));
-app.get('/api/members', (_, res) => res.json(db.members.map(m => ({ id: m.id, name: m.name, school: m.school, status: m.status }))));
+app.get('/api/health', (_, res) => res.json({ ok: true, storage: USE_SB ? 'supabase' : 'local file (not permanent)' }));
+app.get('/api/members', (_, res) => res.json(db.members.map(m => ({ id: m.id, name: m.name, school: m.school, zone: m.zone || '', status: m.status }))));
 app.post('/api/members', (req, res) => {
   const name = clean(req.body.name), school = clean(req.body.school), phone = normPhone(req.body.phone);
   if (name.length < 3 || !school) return res.status(400).json({ error: 'Enter your full name and school/zone.' });
   if (!phone) return res.status(400).json({ error: 'Enter a valid Safaricom/Airtel number, e.g. 0712345678.' });
+  const zone = ZONES.includes(req.body.zone) ? req.body.zone : null;
+  if (!zone) return res.status(400).json({ error: 'Choose your zone: Thiba or Murinduko.' });
   const regNo = clean(req.body.regNo).toUpperCase().slice(0, 20), idNo = clean(req.body.idNo).replace(/\s/g, '').slice(0, 15);
   if (regNo.length < 3) return res.status(400).json({ error: 'Enter your registration number.' });
   if (!/^\d{6,10}$/.test(idNo)) return res.status(400).json({ error: 'Enter your national ID number (digits only).' });
@@ -44,7 +75,7 @@ app.post('/api/members', (req, res) => {
   if (db.members.some(m => m.phone === phone)) return res.status(409).json({ error: 'This phone number is already registered.' });
   if (db.members.some(m => m.idNo === idNo)) return res.status(409).json({ error: 'This ID number is already registered.' });
   if (db.members.some(m => m.regNo === regNo)) return res.status(409).json({ error: 'This registration number is already registered.' });
-  db.members.push({ id: crypto.randomUUID(), name, school, phone, regNo, idNo, status: 'Pending', pinHash: hashPin(pin), kin: [], kinLocked: false, created: new Date().toISOString() }); save();
+  db.members.push({ id: crypto.randomUUID(), name, school, zone, phone, regNo, idNo, status: 'Pending', pinHash: hashPin(pin), kin: [], kinLocked: false, created: new Date().toISOString() }); save();
   res.json({ message: 'Registered. The Chairman will verify your membership.' });
 });
 app.get('/api/admin/members', admin('chairman'), (_, res) => res.json(db.members.map(({ pinHash, kin, ...m }) => ({ ...m, kinCount: (kin || []).length, kinLocked: !!m.kinLocked }))));
@@ -80,17 +111,27 @@ app.post('/api/kin/save', (req, res) => {
   m.kin = out; save(); res.json({ message: 'Saved. You can keep editing until the Chairman locks the list.' });
 });
 const CERT_DIR = path.join(path.dirname(FILE), 'certs');
-const certOk = f => typeof f === 'string' && /^[a-f0-9-]{36}\.(jpg|png)$/.test(f) && fs.existsSync(path.join(CERT_DIR, f));
-app.post('/api/kin/cert', (req, res) => {
+const certOk = f => typeof f === 'string' && /^[a-f0-9-]{36}\.(jpg|png)$/.test(f) && (db.certNames || []).includes(f);
+app.post('/api/kin/cert', async (req, res) => {
   const m = memberAuth(req, res); if (!m) return;
   if (m.kinLocked) return res.status(403).json({ error: 'The Chairman has locked your list.' });
   const mt = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body.image || ''));
   if (!mt) return res.status(400).json({ error: 'Upload a photo (JPG or PNG).' });
   const buf = Buffer.from(mt[2], 'base64'); if (buf.length > 1500000) return res.status(413).json({ error: 'Image too large. Try a smaller photo.' });
-  fs.mkdirSync(CERT_DIR, { recursive: true });
-  const f = crypto.randomUUID() + (mt[1] === 'png' ? '.png' : '.jpg'); fs.writeFileSync(path.join(CERT_DIR, f), buf); res.json({ cert: f });
+  const f = crypto.randomUUID() + (mt[1] === 'png' ? '.png' : '.jpg');
+  try {
+    if (USE_SB) await sb('mwe_files', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ name: f, mime: 'image/' + (mt[1] === 'png' ? 'png' : 'jpeg'), data: mt[2] }) });
+    else { fs.mkdirSync(CERT_DIR, { recursive: true }); fs.writeFileSync(path.join(CERT_DIR, f), buf); }
+  } catch (e) { console.error('CERT STORE FAILED:', e.message); return res.status(500).json({ error: 'Could not store the image. Try again.' }); }
+  db.certNames.push(f); save(); res.json({ cert: f });
 });
-app.get('/api/admin/cert/:file', admin('chairman'), (req, res) => certOk(req.params.file) ? res.sendFile(path.join(CERT_DIR, req.params.file)) : res.sendStatus(404));
+app.get('/api/admin/cert/:file', admin('chairman'), async (req, res) => {
+  if (!certOk(req.params.file)) return res.sendStatus(404);
+  try {
+    if (USE_SB) { const r = await sb('mwe_files?name=eq.' + req.params.file + '&select=mime,data'); if (!r || !r[0]) return res.sendStatus(404); res.type(r[0].mime).send(Buffer.from(r[0].data, 'base64')); }
+    else res.sendFile(path.join(CERT_DIR, req.params.file));
+  } catch (e) { console.error(e.message); res.sendStatus(500); }
+});
 const memberById = (req, res) => { const m = db.members.find(x => x.id === req.params.id); if (!m) res.sendStatus(404); return m; };
 app.get('/api/admin/members/:id/kin', admin('chairman'), (req, res) => { const m = memberById(req, res); if (m) res.json({ name: m.name, locked: !!m.kinLocked, kin: m.kin || [] }); });
 app.post('/api/admin/members/:id/lock', admin('chairman'), (req, res) => { const m = memberById(req, res); if (m) { m.kinLocked = !!req.body.locked; save(); res.json({ ok: true }); } });
@@ -104,10 +145,13 @@ app.post('/api/admin/members/:id/resetpin', admin('chairman'), (req, res) => {
 app.post('/api/member/summary', (req, res) => {
   const m = memberAuth(req, res); if (!m) return;
   const mine = db.payments.filter(p => p.phone === m.phone).slice().reverse();
-  res.json({ name: m.name, school: m.school, phone: m.phone, regNo: m.regNo || '', status: m.status, kinLocked: !!m.kinLocked,
+  res.json({ name: m.name, school: m.school, zone: m.zone || '', phone: m.phone, regNo: m.regNo || '', status: m.status, kinLocked: !!m.kinLocked,
     paidTotal: mine.filter(p => p.status === 'Paid').reduce((t, p) => t + p.amount, 0), pending: mine.filter(p => p.status !== 'Paid' && p.status !== 'Failed').length,
     payments: mine.slice(0, 30).map(p => ({ amount: p.amount, status: p.status, caseTitle: p.caseTitle || 'General', code: p.code, created: p.created })) });
 });
+// --- Leadership list: visible to logged-in members only (phone + PIN).
+app.post('/api/leaders', (req, res) => { const m = memberAuth(req, res); if (m) res.json(db.leaders); });
+
 // --- Welfare cases: levy per case; late remittance (after the due date) attracts 50% interest on the principal.
 const PAYOUTS = { bereavement_member: ['Bereavement: principal member', 1000], bereavement_family: ['Bereavement: nuclear family member', 500], bereavement_parent: ['Bereavement: parent of principal member', 300], wedding: ['Wedding / dowry / parental blessing', 1000], other: ['Other case', 0] };
 const owed = c => Date.now() > new Date(c.due + 'T23:59:59+03:00').getTime() ? Math.ceil(c.levy * 1.5) : c.levy;
@@ -150,4 +194,4 @@ app.post('/api/admin/payments/:id/:action', admin('chairman', 'treasurer'), (req
   save(); res.json(p);
 });
 
-app.listen(process.env.PORT || 3000, () => console.log('MWEJUSTWO running'));
+loadDb().then(() => app.listen(process.env.PORT || 3000, () => console.log('MWEJUSTWO running'))).catch(e => { console.error('Startup failed (not starting with empty data):', e.message); process.exit(1); });
