@@ -1,6 +1,6 @@
-// MWEJUSTWO backend: registration, directory, manual M-Pesa payments, welfare cases, next of kin, officials.
+// MWEJUSTWO backend: registration, directory, M-Pesa STK push, chairman admin.
 const express = require('express'), cors = require('cors'), fs = require('fs'), path = require('path'), crypto = require('crypto');
-const app = express(); app.use(cors()); app.use(express.json());
+const app = express(); app.use(cors()); app.use(express.json({ limit: '4mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- storage (JSON file). On Render free tier disk resets: attach a disk or swap for Supabase/MongoDB.
@@ -36,10 +36,15 @@ app.post('/api/members', (req, res) => {
   const name = clean(req.body.name), school = clean(req.body.school), phone = normPhone(req.body.phone);
   if (name.length < 3 || !school) return res.status(400).json({ error: 'Enter your full name and school/zone.' });
   if (!phone) return res.status(400).json({ error: 'Enter a valid Safaricom/Airtel number, e.g. 0712345678.' });
+  const regNo = clean(req.body.regNo).toUpperCase().slice(0, 20), idNo = clean(req.body.idNo).replace(/\s/g, '').slice(0, 15);
+  if (regNo.length < 3) return res.status(400).json({ error: 'Enter your registration number.' });
+  if (!/^\d{6,10}$/.test(idNo)) return res.status(400).json({ error: 'Enter your national ID number (digits only).' });
   const pin = String(req.body.pin || '');
   if (!/^\d{4,6}$/.test(pin)) return res.status(400).json({ error: 'Choose a PIN of 4 to 6 digits. You will use it to edit your next of kin.' });
   if (db.members.some(m => m.phone === phone)) return res.status(409).json({ error: 'This phone number is already registered.' });
-  db.members.push({ id: crypto.randomUUID(), name, school, phone, status: 'Pending', pinHash: hashPin(pin), kin: [], kinLocked: false, created: new Date().toISOString() }); save();
+  if (db.members.some(m => m.idNo === idNo)) return res.status(409).json({ error: 'This ID number is already registered.' });
+  if (db.members.some(m => m.regNo === regNo)) return res.status(409).json({ error: 'This registration number is already registered.' });
+  db.members.push({ id: crypto.randomUUID(), name, school, phone, regNo, idNo, status: 'Pending', pinHash: hashPin(pin), kin: [], kinLocked: false, created: new Date().toISOString() }); save();
   res.json({ message: 'Registered. The Chairman will verify your membership.' });
 });
 app.get('/api/admin/members', admin('chairman'), (_, res) => res.json(db.members.map(({ pinHash, kin, ...m }) => ({ ...m, kinCount: (kin || []).length, kinLocked: !!m.kinLocked }))));
@@ -68,10 +73,24 @@ app.post('/api/kin/save', (req, res) => {
   for (const k of (Array.isArray(req.body.kin) ? req.body.kin.slice(0, 30) : [])) {
     if (!KIN[k.group] || !KIN[k.group].includes(k.relation)) return res.status(400).json({ error: 'Invalid relationship.' });
     const name = clean(k.name); if (name.length < 3) return res.status(400).json({ error: 'Enter the full name of everyone you list.' });
-    out.push({ group: k.group, relation: k.relation, name, idNo: clean(k.idNo).slice(0, 20), phone: clean(k.phone).slice(0, 15) });
+    const cert = certOk(k.cert) ? k.cert : '';
+    if (k.relation === 'Child' && !cert) return res.status(400).json({ error: 'Upload the birth certificate for ' + name + ' (child).' });
+    out.push({ group: k.group, relation: k.relation, name, idNo: clean(k.idNo).slice(0, 20), phone: clean(k.phone).slice(0, 15), cert });
   }
   m.kin = out; save(); res.json({ message: 'Saved. You can keep editing until the Chairman locks the list.' });
 });
+const CERT_DIR = path.join(path.dirname(FILE), 'certs');
+const certOk = f => typeof f === 'string' && /^[a-f0-9-]{36}\.(jpg|png)$/.test(f) && fs.existsSync(path.join(CERT_DIR, f));
+app.post('/api/kin/cert', (req, res) => {
+  const m = memberAuth(req, res); if (!m) return;
+  if (m.kinLocked) return res.status(403).json({ error: 'The Chairman has locked your list.' });
+  const mt = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body.image || ''));
+  if (!mt) return res.status(400).json({ error: 'Upload a photo (JPG or PNG).' });
+  const buf = Buffer.from(mt[2], 'base64'); if (buf.length > 1500000) return res.status(413).json({ error: 'Image too large. Try a smaller photo.' });
+  fs.mkdirSync(CERT_DIR, { recursive: true });
+  const f = crypto.randomUUID() + (mt[1] === 'png' ? '.png' : '.jpg'); fs.writeFileSync(path.join(CERT_DIR, f), buf); res.json({ cert: f });
+});
+app.get('/api/admin/cert/:file', admin('chairman'), (req, res) => certOk(req.params.file) ? res.sendFile(path.join(CERT_DIR, req.params.file)) : res.sendStatus(404));
 const memberById = (req, res) => { const m = db.members.find(x => x.id === req.params.id); if (!m) res.sendStatus(404); return m; };
 app.get('/api/admin/members/:id/kin', admin('chairman'), (req, res) => { const m = memberById(req, res); if (m) res.json({ name: m.name, locked: !!m.kinLocked, kin: m.kin || [] }); });
 app.post('/api/admin/members/:id/lock', admin('chairman'), (req, res) => { const m = memberById(req, res); if (m) { m.kinLocked = !!req.body.locked; save(); res.json({ ok: true }); } });
@@ -82,15 +101,13 @@ app.post('/api/admin/members/:id/resetpin', admin('chairman'), (req, res) => {
   m.pinHash = hashPin(req.body.pin); save(); res.json({ ok: true });
 });
 
-// --- Member app: summary of the logged-in member (phone + PIN).
 app.post('/api/member/summary', (req, res) => {
   const m = memberAuth(req, res); if (!m) return;
   const mine = db.payments.filter(p => p.phone === m.phone).slice().reverse();
-  res.json({ name: m.name, school: m.school, phone: m.phone, status: m.status, kinLocked: !!m.kinLocked,
+  res.json({ name: m.name, school: m.school, phone: m.phone, regNo: m.regNo || '', status: m.status, kinLocked: !!m.kinLocked,
     paidTotal: mine.filter(p => p.status === 'Paid').reduce((t, p) => t + p.amount, 0), pending: mine.filter(p => p.status !== 'Paid' && p.status !== 'Failed').length,
     payments: mine.slice(0, 30).map(p => ({ amount: p.amount, status: p.status, caseTitle: p.caseTitle || 'General', code: p.code, created: p.created })) });
 });
-
 // --- Welfare cases: levy per case; late remittance (after the due date) attracts 50% interest on the principal.
 const PAYOUTS = { bereavement_member: ['Bereavement: principal member', 1000], bereavement_family: ['Bereavement: nuclear family member', 500], bereavement_parent: ['Bereavement: parent of principal member', 300], wedding: ['Wedding / dowry / parental blessing', 1000], other: ['Other case', 0] };
 const owed = c => Date.now() > new Date(c.due + 'T23:59:59+03:00').getTime() ? Math.ceil(c.levy * 1.5) : c.levy;
