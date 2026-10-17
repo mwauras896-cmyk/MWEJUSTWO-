@@ -2,6 +2,8 @@
 const express = require('express'), cors = require('cors'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const app = express(); app.use(cors()); app.use(express.json({ limit: '4mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+// Lets the Android app (APK) open full screen without a browser bar: paste the JSON from PWABuilder into the ASSETLINKS_JSON setting in Render.
+app.get('/.well-known/assetlinks.json', (_, res) => process.env.ASSETLINKS_JSON ? res.type('json').send(process.env.ASSETLINKS_JSON) : res.sendStatus(404));
 
 // --- storage (JSON file). On Render free tier disk resets: attach a disk or swap for Supabase/MongoDB.
 const FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');   // only used if Supabase is not configured
