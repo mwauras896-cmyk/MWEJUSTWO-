@@ -1,4 +1,4 @@
-// MWEJUSTWO backend: registration, directory, M-Pesa STK push, chairman admin.
+// MWEJUSTWO backend: registration, directory, manual M-Pesa payments, welfare cases, next of kin, officials.
 const express = require('express'), cors = require('cors'), fs = require('fs'), path = require('path'), crypto = require('crypto');
 const app = express(); app.use(cors()); app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -80,6 +80,15 @@ app.post('/api/admin/members/:id/resetpin', admin('chairman'), (req, res) => {
   const m = memberById(req, res); if (!m) return;
   if (!/^\d{4,6}$/.test(String(req.body.pin || ''))) return res.status(400).json({ error: 'PIN must be 4 to 6 digits.' });
   m.pinHash = hashPin(req.body.pin); save(); res.json({ ok: true });
+});
+
+// --- Member app: summary of the logged-in member (phone + PIN).
+app.post('/api/member/summary', (req, res) => {
+  const m = memberAuth(req, res); if (!m) return;
+  const mine = db.payments.filter(p => p.phone === m.phone).slice().reverse();
+  res.json({ name: m.name, school: m.school, phone: m.phone, status: m.status, kinLocked: !!m.kinLocked,
+    paidTotal: mine.filter(p => p.status === 'Paid').reduce((t, p) => t + p.amount, 0), pending: mine.filter(p => p.status !== 'Paid' && p.status !== 'Failed').length,
+    payments: mine.slice(0, 30).map(p => ({ amount: p.amount, status: p.status, caseTitle: p.caseTitle || 'General', code: p.code, created: p.created })) });
 });
 
 // --- Welfare cases: levy per case; late remittance (after the due date) attracts 50% interest on the principal.
