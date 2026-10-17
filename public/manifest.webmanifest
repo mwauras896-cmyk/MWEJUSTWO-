@@ -1,1 +1,37 @@
-{"name":"MWEJUSTWO Welfare","short_name":"MWEJUSTWO","start_url":"/","display":"standalone","background_color":"#004d40","theme_color":"#004d40","icons":[{"src":"/icon-192.png","sizes":"192x192","type":"image/png"},{"src":"/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}]}
+{
+ "id": "/",
+ "name": "MWEJUSTWO Welfare",
+ "short_name": "MWEJUSTWO",
+ "description": "Mwea East Junior Teachers' Welfare Organization: contributions, notices, minutes and accounts.",
+ "start_url": "/",
+ "scope": "/",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#004d40",
+ "theme_color": "#004d40",
+ "lang": "en",
+ "categories": [
+  "finance",
+  "productivity"
+ ],
+ "icons": [
+  {
+   "src": "/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any"
+  },
+  {
+   "src": "/icon-512-maskable.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}
