@@ -162,4 +162,4 @@ function drawDir() { const q = $('q').value.toLowerCase(); const r = members.fil
 $('q').oninput = drawDir;
 api('/api/config').then(c => { $('payNo').textContent = c.number; $('payName').textContent = c.name; document.querySelectorAll('.pn').forEach(x => x.textContent = c.number); document.querySelectorAll('.pm').forEach(x => x.textContent = c.name); }).catch(() => {});
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
-</script></body></html>
+  </script><script src="/branding.js"></script></body></html>
