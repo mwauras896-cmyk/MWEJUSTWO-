@@ -96,4 +96,5 @@ async function loadChair() {
 }
 window.setPin = i => { const p = prompt('New PIN for this leader (4 to 6 digits). Give it to them privately.'); if (p) post(`/api/admin/leaders/${i}/setpin`, { pin: p }, ctok).then(() => { toast('PIN saved.'); loadChair(); }).catch(e => toast(e.message, false)); };
 window.sign = id => post(`/api/admin/ledger/${id}/signoff`, {}, ctok).then(loadChair).catch(e => toast(e.message, false));
+  <script src="/branding.js"></script>
 </script></body></html>
