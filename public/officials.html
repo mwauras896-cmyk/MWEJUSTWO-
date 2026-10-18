@@ -182,4 +182,5 @@ $('unlock').onclick = e => act(e.target, async () => { const d = await api('/api
 $('logout').onclick = () => { sessionStorage.clear(); tok = role = null; $('lock').hidden = false; $('panel').hidden = true; };
 api('/api/config').then(c => { $('payNo').textContent = c.number; $('payName').textContent = c.name; }).catch(() => {});
 loadCases(); loadDir(); if (tok) loadAdmin();
+  <script src="/branding.js"></script>
 </script></body></html>
