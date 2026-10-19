@@ -183,4 +183,5 @@ $('logout').onclick = () => { sessionStorage.clear(); tok = role = null; $('lock
 api('/api/config').then(c => { $('payNo').textContent = c.number; $('payName').textContent = c.name; }).catch(() => {});
 loadCases(); loadDir(); if (tok) loadAdmin();
   <script src="/branding.js"></script>
+  <script src="/officials-view.js"></script>
 </script></body></html>
