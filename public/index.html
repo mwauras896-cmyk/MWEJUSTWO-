@@ -18,6 +18,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--
 input,select{width:100%;padding:14px;border:1px solid #ddd;border-radius:14px;font-size:1rem;background:#fff;margin:6px 0 10px} 
 label{font-weight:600;font-size:.9rem} 
 .btn{width:100%;padding:14px;border:0;border-radius:10px;font-size:1.05rem;font-weight:700;background:var(--g);color:#fff;margin-top:8px;cursor:pointer} 
+.btn:disabled{background:#9e9e9e;color:#666;cursor:not-allowed}
 .gold{background:var(--gold);color:#222}.ghost{background:none;color:var(--g);text-decoration:underline;font-weight:600} 
 .card{background:var(--g2);color:#fff;border-radius:24px;padding:22px;margin:18px;box-shadow:0 6px 16px rgba(0,77,64,.3)} 
 .card .big{font-size:2rem;font-weight:700;margin:6px 0 16px} 
@@ -283,8 +284,13 @@ async function api(p, o = {}) {
 } 
 
 async function act(b, f) { 
+  if (!b) return await f();
   b.disabled = true; 
-  try { await f(); } catch (e) { toast(e.message, false); } 
+  try { 
+    await f(); 
+  } catch (e) { 
+    toast(e.message || 'Error occurred. Try again.', false); 
+  } 
   b.disabled = false; 
 } 
 
@@ -293,7 +299,7 @@ const post = (p, b) => api(p, { method: 'POST', body: JSON.stringify(b) });
 function go(v) { 
   document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v)); 
   $('nav').classList.toggle('on', !!cred && !['login', 'reg'].includes(v)); 
-  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('a', b.dataset.go === v || (b.dataset.go === 'cases' && ['pay', 'stmt', 'dir'].includes(v) && false))); 
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('a', b.dataset.go === v)); 
   if (v === 'cases') loadCases(); 
   if (v === 'dir') loadDir(); 
   if (v === 'stmt') renderStmt(); 
@@ -311,14 +317,14 @@ $('eye').onclick = () =>$('lpin').type = $('lpin').type === 'password' ? 'text' 
 $('toreg').onclick = () => go('reg');$('quickpay').onclick = () => go('pay'); 
 
 function renderHome() { 
-  $('hn').textContent = sum.name; 
-  $('bal').textContent = hidden ? '****' : sum.paidTotal.toLocaleString(); 
+  if (!sum) return;
+  $('hn').textContent = sum.name \vert{}\vert{} '';$('bal').textContent = hidden ? '****' : (sum.paidTotal || 0).toLocaleString(); 
   $('hide').textContent = hidden ? '🙈' : '👁'; 
-  $('hs').textContent = sum.status === 'Verified' ? '✔' : '⏳';$('pn2').textContent = sum.name; 
-  $('pph').textContent = sum.phone; 
-  $('psc').textContent = sum.school; 
-  $('prg').textContent = sum.regNo \vert{}\vert{} '-';$('pz').textContent = sum.zone || '-'; 
-  $('pst').textContent = sum.status === 'Verified' ? 'Verified member' : 'Pending verification by the Chairman';$('pp').value = '0' + sum.phone.slice(3); 
+  $('hs').textContent = sum.status === 'Verified' ? '✔' : '⏳'; 
+  $('pn2').textContent = sum.name \vert{}\vert{} '';$('pph').textContent = sum.phone || ''; 
+  $('psc').textContent = sum.school \vert{}\vert{} '';$('prg').textContent = sum.regNo || '-'; 
+  $('pz').textContent = sum.zone \vert{}\vert{} '-';$('pst').textContent = sum.status === 'Verified' ? 'Verified member' : 'Pending verification by the Chairman'; 
+  if (sum.phone) $('pp').value = '0' + sum.phone.slice(3); 
 } 
 
 async function refresh() { 
@@ -329,7 +335,15 @@ async function refresh() {
 $('hide').onclick = () => { hidden = !hidden; renderHome(); }; 
 
 $('lbtn').onclick = e => act(e.target, async () => { 
-  const c = { phone: $('lp').value, pin:$('lpin').value }; 
+  const phoneVal = $('lp').value.trim();
+  const pinVal = $('lpin').value.trim();
+  
+  if (!phoneVal || !pinVal) {
+    toast('Please enter both phone number and PIN.', false);
+    return;
+  }
+
+  const c = { phone: phoneVal, pin: pinVal }; 
   cred = c; 
   let leader = null, memErr = null; 
   try { leader = await post('/api/leader/login', c); } catch {} 
@@ -356,12 +370,14 @@ $('lbtn').onclick = e => act(e.target, async () => {
   loadFeed(); 
 }); 
 
-$('out').onclick =$('sout').onclick = () => { 
+$('out').onclick = () => logout();$('sout').onclick = () => logout();
+
+function logout() {
   try { sessionStorage.clear(); } catch {} 
   cred = sum = feed = null; 
   $('lp').value = ''; 
   go('login'); 
-}; 
+}
 
 $('regBtn').onclick = e => act(e.target, async () => { 
   const d = await post('/api/members', { 
@@ -373,7 +389,7 @@ $('regBtn').onclick = e => act(e.target, async () => {
     phone: $('rp').value, 
     pin: $('rpin').value 
   }); 
-  toast(d.message); 
+  toast(d.message || 'Registration successful!'); 
   $('lp').value =$('rp').value; 
   ['rn', 'rreg', 'rid', 'rs', 'rp', 'rpin', 'rzone'].forEach(i => $(i).value = ''); 
   go('login'); 
@@ -404,7 +420,7 @@ $('payBtn').onclick = e => act(e.target, async () => {
     code: $('pc').value, 
     caseId: $('pcase').value 
   }); 
-  toast(d.message); 
+  toast(d.message || 'Payment submitted.'); 
   $('pc').value = ''; 
   if (cred) { await refresh(); go('stmt'); } 
 }); 
@@ -490,13 +506,17 @@ function drawDir() {
   $('dlist').innerHTML = r.map(m => `<div class="row"><div><b>${esc(m.name)}</b><br><small>${esc(m.school)}${m.zone ? ' · ' + esc(m.zone) : ''}</small></div><span class="badge ${m.status}">${m.status}</span></div>`).join('') || 'No members found.'; 
 } 
 
-$('q').oninput = drawDir; 
+if ($('q'))$('q').oninput = drawDir; 
 
 api('/api/config').then(c => { 
-  $('payNo').textContent = c.number; 
-  $('payName').textContent = c.name; 
-  document.querySelectorAll('.pn').forEach(x => x.textContent = c.number); 
-  document.querySelectorAll('.pm').forEach(x => x.textContent = c.name); 
+  if (c.number) {
+    $('payNo').textContent = c.number; 
+    document.querySelectorAll('.pn').forEach(x => x.textContent = c.number); 
+  }
+  if (c.name) {
+    $('payName').textContent = c.name; 
+    document.querySelectorAll('.pm').forEach(x => x.textContent = c.name); 
+  }
 }).catch(() => {}); 
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {}); 
