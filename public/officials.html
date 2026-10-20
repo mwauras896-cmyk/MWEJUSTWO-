@@ -184,6 +184,12 @@ window.del = id => confirm('Permanently delete this member record? Use Dismiss i
 $('unlock').onclick = e => act(e.target, async () => { const d = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ pin: $('pin').value }) }); tok = d.token; role = d.role; sessionStorage.setItem('tok', tok); sessionStorage.setItem('role', role); $('pin').value = ''; await loadAdmin(); });
 $('logout').onclick = () => { sessionStorage.clear(); tok = role = null; $('lock').hidden = false; $('panel').hidden = true; };
 api('/api/config').then(c => { $('payNo').textContent = c.number; $('payName').textContent = c.name; }).catch(() => {});
+  $('regToggle').onclick = () => {
+  const box = $('regBox');
+  box.hidden = !box.hidden;
+  $('regToggle').textContent = box.hidden ? '➕ New Member Registration' : '✖ Close registration form';
+  if (!box.hidden) box.scrollIntoView({ behavior: 'smooth' });
+};
 loadCases(); loadDir(); if (tok) loadAdmin();
 
 </script>
