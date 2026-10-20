@@ -300,8 +300,10 @@
       } catch {} 
     } 
 
-    const fil = d => d.entries.filter(x => (!$('xf').value \vert{}\vert{} x.date >=$('xf').value) && (!$('xt').value \vert{}\vert{} x.date <=$('xt').value)); 
-
+    
+const fil = d => d.entries.filter(x =>
+  (!$('xf').value || x.date >= $('xf').value) &&
+  (!$('xt').value || x.date <= $('xt').value));
     $('xpdf').onclick = () => ledgerData && MwePdf.deliver($('xres'), MwePdf.accountsPdf(fil(ledgerData), ledgerData.cases, $('xf').value, $('xt').value, 'Welfare accounts'), 'welfare-accounts.pdf', 'application/pdf'); 
     $('xcsv').onclick = () => ledgerData && MwePdf.deliver($('xres'), MwePdf.accountsCsv(fil(ledgerData)), 'welfare-accounts.csv', 'text/csv'); 
     $('cpdf').onclick = () => chairLedger && MwePdf.deliver($('cres'), MwePdf.accountsPdf(chairLedger.entries, chairLedger.cases, '', '', 'Welfare accounts'), 'welfare-accounts.pdf', 'application/pdf'); 
