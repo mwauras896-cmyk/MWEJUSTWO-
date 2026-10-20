@@ -516,7 +516,11 @@ function drawDir() {
   const r = members.filter(m => (m.name + m.school).toLowerCase().includes(q)); 
   $('dlist').innerHTML = r.map(m => `<div class="row"><div><b>${esc(m.name)}</b><br><small>${esc(m.school)}${m.zone ? ' · ' + esc(m.zone) : ''}</small></div><span class="badge ${m.status}">${m.status}</span></div>`).join('') || 'No members found.'; 
 } 
-
+$('leadToggle').onclick = () => {
+  const box = $('leadlist');
+  box.hidden = !box.hidden;
+  $('leadToggle').textContent = box.hidden ? '🏛 View Our Leaders' : '✖ Hide Our Leaders';
+};
 if ($('q')) $('q').oninput = drawDir; 
 
 api('/api/config').then(c => { 
