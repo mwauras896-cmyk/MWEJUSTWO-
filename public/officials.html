@@ -182,6 +182,28 @@ $('unlock').onclick = e => act(e.target, async () => { const d = await api('/api
 $('logout').onclick = () => { sessionStorage.clear(); tok = role = null; $('lock').hidden = false; $('panel').hidden = true; };
 api('/api/config').then(c => { $('payNo').textContent = c.number; $('payName').textContent = c.name; }).catch(() => {});
 loadCases(); loadDir(); if (tok) loadAdmin();
-  <script src="/branding.js"></script>
-<script src="/officials-view.js"></script>
-</script></body></html>
+
+</script>
+<script>
+(function () {
+  // Logo at the top of the page
+  var h = document.querySelector('header');
+  if (h && !h.querySelector('img')) {
+    var i = new Image();
+    i.src = '/logo.png';
+    i.alt = 'Mwea East JSS Teachers Welfare logo';
+    i.width = 80; i.height = 80;
+    i.style.cssText = 'display:block;margin:0 auto 10px;border-radius:50%;border:3px solid #d4af37;';
+    h.insertBefore(i, h.firstChild);
+  }
+  // Members arrive through "My Next of Kin" (#kin): hide the Officials Access box for them.
+  // Officials who open the page from their own button (no #kin) still see it.
+  function apply() {
+    var a = document.querySelector('.admin');
+    if (a) { a.style.display = (location.hash === '#kin') ? 'none' : ''; }
+  }
+  apply();
+  window.addEventListener('hashchange', apply);
+})();
+</script>
+</body></html>
