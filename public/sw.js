@@ -1,4 +1,4 @@
-const CACHE = 'mwe-v2';
+const CACHE = 'mwe-v3';
 const SHELL = ['/', '/index.html', '/logo.png', '/icon-192.png', '/manifest.webmanifest'];
 
 self.addEventListener('install', e => {
