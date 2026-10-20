@@ -306,7 +306,7 @@ function go(v) {
   if (v === 'cases') loadCases(); 
   if (v === 'dir') loadDir(); 
   if (v === 'stmt') renderStmt(); 
-  if (v === 'lead') loadLeaders(); 
+if (v === 'lead') { $('leadlist').hidden = true; $('leadToggle').textContent = '🏛 View Our Leaders'; loadLeaders(); }  
   if (v === 'news' || v === 'acct') loadFeed().then(() => v === 'news' ? renderNews() : renderAcct()); 
   window.scrollTo(0, 0); 
 } 
