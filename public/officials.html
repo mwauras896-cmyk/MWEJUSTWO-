@@ -27,7 +27,9 @@ td{padding:9px 10px;border-bottom:1px solid #ddd;font-size:.92rem}
 <main><p><a href="/">← Back to the app</a></p>
 <div class="notice"><b>Security Notice:</b> Payments are confirmed by the Treasurer, then approved by the Chairman. Verifications, disbursements and password resets are managed by the Chairman.</div>
 
-<h2>New Member Registration</h2>
+<button id="regToggle" type="button" style="margin-top:28px">➕ New Member Registration</button>
+<div id="regBox" hidden>
+<h2 style="margin-top:14px">New Member Registration</h2>
 <label>Full Name</label><input id="rn" placeholder="e.g. John Mwaura" autocomplete="name">
 <label>Registration No.</label><input id="rr" placeholder="e.g. TSC or registration number">
 <label>ID Number</label><input id="ri" type="tel" inputmode="numeric" placeholder="National ID number">
