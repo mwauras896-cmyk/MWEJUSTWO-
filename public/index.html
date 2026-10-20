@@ -215,11 +215,13 @@ nav.on{display:flex}nav button{border:0;background:none;font-size:.75rem;color:#
 <!-- DIRECTORY VIEW -->
 <div class="view" id="v-dir">
   <div class="top"><h3>Member Directory</h3></div>
-  <div class="pad">
-    <input id="q" placeholder="🔍 Search by name or school">
-    <div id="dlist">Loading…</div>
-  </div>
-</div> 
+<div class="pad">
+    <button class="btn" id="dirToggle" type="button">👥 View Member Directory</button>
+    <div id="dirBox" hidden style="margin-top:14px">
+      <input id="q" placeholder="🔍 Search by name or school">
+      <div id="dlist">Loading…</div>
+    </div>
+  </div>  
 
 <!-- HELP VIEW -->
 <div class="view" id="v-help">
