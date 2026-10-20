@@ -523,6 +523,11 @@ $('leadToggle').onclick = () => {
   box.hidden = !box.hidden;
   $('leadToggle').textContent = box.hidden ? '🏛 View Our Leaders' : '✖ Hide Our Leaders';
 };
+$('dirToggle').onclick = () => {
+  const box = $('dirBox');
+  box.hidden = !box.hidden;
+  $('dirToggle').textContent = box.hidden ? '👥 View Member Directory' : '✖ Hide Member Directory';
+};  
 if ($('q')) $('q').oninput = drawDir; 
 
 api('/api/config').then(c => { 
