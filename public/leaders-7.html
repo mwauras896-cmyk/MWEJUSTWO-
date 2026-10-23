@@ -1,0 +1,439 @@
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1"> 
+  <meta name="theme-color" content="#004d40">
+  <title>Leaders' Desk · MWEJUSTWO</title> 
+  <style> 
+    :root{--g:#004d40;--gold:#d4af37}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,sans-serif;background:#eef1f0;color:#222} 
+    header{background:var(--g);color:#fff;padding:18px;border-bottom:5px solid var(--gold)}
+    header h1{margin:0;font-size:1.3rem;color:var(--gold)}
+    header a{color:#fff} 
+    main{max-width:640px;margin:0 auto;padding:14px}
+    .card{background:#fff;border-radius:14px;padding:14px;margin-bottom:14px} 
+    h2{margin:0 0 8px;color:var(--g);font-size:1.1rem}
+    label{display:block;font-weight:600;font-size:.9rem;margin-top:8px} 
+    input,select,textarea{width:100%;padding:12px;border:1px solid #ccc;border-radius:10px;font-size:1rem;margin-top:4px;font-family:inherit} 
+    button{width:100%;margin-top:10px;padding:12px;font-weight:700;font-size:1rem;color:var(--gold);background:var(--g);border:2px solid var(--gold);border-radius:10px;cursor:pointer} 
+    button.sm{width:auto;padding:6px 10px;font-size:.85rem;margin:4px 4px 0 0}
+    button.dark{background:#333}
+    button:disabled{opacity:.6;cursor:not-allowed} 
+    .row{border-bottom:1px solid #eee;padding:8px 0;font-size:.92rem}
+    .row small{color:#666}
+    .in{color:#2e7d32;font-weight:700}
+    .out{color:#c62828;font-weight:700} 
+    .sum{display:flex;gap:8px;text-align:center}
+    .sum div{flex:1;background:#f3f6f5;border-radius:10px;padding:8px}
+    .sum b{display:block;font-size:1.05rem} 
+    a.wa{display:inline-block;padding:7px 12px;background:#25D366;color:#fff;border-radius:8px;font-size:.88rem;text-decoration:none;font-weight:700;margin-top:4px}
+    a.wa.done{background:#9e9e9e} 
+    #toast{position:fixed;left:12px;right:12px;bottom:14px;padding:12px;border-radius:10px;color:#fff;display:none;max-width:616px;margin:auto;z-index:99} 
+  </style>
+</head>
+<body> 
+
+  <header>
+    <h1>Leaders' Desk</h1>
+    <a href="/">← Back to the app</a>
+  </header>
+
+  <main> 
+    <!-- LOGIN CARD -->
+    <div class="card" id="login">
+      <h2>Leader login</h2>
+      <p style="margin:0;color:#555;font-size:.9rem">Use your phone number and the PIN the Chairman gave you.</p> 
+      <label>Phone number</label>
+      <input id="lp" type="tel" placeholder="07XXXXXXXX">
+      <label>PIN</label>
+      <input id="lpin" type="password" inputmode="numeric" maxlength="6"> 
+      <button id="lbtn">Login</button>
+    </div> 
+
+    <!-- DESK DASHBOARD -->
+    <div id="desk" hidden> 
+      <div class="card">
+        <b id="who"></b><br>
+        <small id="title"></small>
+        <button class="sm dark" id="out" style="margin-top:8px">Log out</button>
+      </div> 
+
+      <!-- LEVY REMINDERS -->
+      <div class="card" id="rcard" hidden>
+        <h2>Levy reminders (WhatsApp)</h2>
+        <p style="margin:0 0 8px;color:#555;font-size:.9rem">Members who have not yet submitted a payment for an open case. Tap a button to open WhatsApp with the message ready, then press send.</p>
+        <div id="rlist">Loading…</div>
+      </div> 
+
+      <!-- POST NOTICE -->
+      <div class="card">
+        <h2>Post a notice</h2>
+        <label>Title</label>
+        <input id="nt" placeholder="e.g. AGM date announced">
+        <label>Details</label>
+        <textarea id="nb" rows="4"></textarea> 
+        <label>Photo (optional)</label>
+        <div class="pkrow"><button type="button" class="sm" data-cam="nic">📷 Take photo</button><button type="button" class="sm" data-cam="ni">🖼 Choose from gallery</button> <small id="nis" style="color:#2e7d32;font-weight:700"></small><input id="ni" class="pk" data-b="ni" type="file" accept="image/*" hidden><input id="nic" class="pk" data-b="ni" type="file" accept="image/*" capture="environment" hidden></div>
+        <button id="nbtn">Post notice</button>
+      </div> 
+
+      <!-- POST MINUTES -->
+      <div class="card" id="mcard" hidden>
+        <h2>Post minutes</h2>
+        <label>Title</label>
+        <input id="mt" placeholder="e.g. Committee meeting minutes">
+        <label>Meeting date</label>
+        <input id="md" type="date"> 
+        <label>Minutes</label>
+        <textarea id="mb" rows="6"></textarea>
+        <label>Photo of signed minutes (optional)</label>
+        <div class="pkrow"><button type="button" class="sm" data-cam="mic">📷 Take photo</button><button type="button" class="sm" data-cam="mi">🖼 Choose from gallery</button> <small id="mis" style="color:#2e7d32;font-weight:700"></small><input id="mi" class="pk" data-b="mi" type="file" accept="image/*" hidden><input id="mic" class="pk" data-b="mi" type="file" accept="image/*" capture="environment" hidden></div>
+        <button id="mbtn">Post minutes</button>
+      </div> 
+
+      <!-- ACCOUNTS -->
+      <div class="card" id="acard" hidden>
+        <h2>Accounts</h2>
+        <div class="sum">
+          <div>In<b id="ti">0</b></div>
+          <div>Out<b id="to">0</b></div>
+          <div>Balance<b id="tb">0</b></div>
+        </div> 
+
+        <label>Type</label>
+        <select id="ak">
+          <option value="in">Money in</option>
+          <option value="out">Money out</option>
+        </select>
+        <label>Category</label>
+        <select id="acat"></select>
+        <label>Welfare case (optional)</label>
+        <select id="acase">
+          <option value="">Not linked to a case</option>
+        </select>
+        <label>Amount (KES)</label>
+        <input id="aa" type="number">
+        <label>Description</label>
+        <input id="ad" placeholder="e.g. Levy collected, Mr Kamau case">
+        <label>Date</label>
+        <input id="adt" type="date"> 
+
+        <button id="abtn">Add entry</button>
+        <div id="al" style="margin-top:10px"></div>
+        <small>Entries are never deleted. To fix a mistake, tap Reverse, then add the correct entry.</small> 
+
+        <div style="margin-top:12px;border-top:1px solid #eee;padding-top:8px">
+          <b>Download accounts</b>
+          <label>From</label>
+          <input id="xf" type="date">
+          <label>To</label>
+          <input id="xt" type="date">
+          <button class="sm" id="xpdf" style="margin-top:8px">PDF</button>
+          <button class="sm" id="xcsv">Spreadsheet (CSV)</button>
+          <div id="xres"></div>
+        </div>
+      </div> 
+
+      <!-- MY ID (optional) -->
+      <div class="card" id="idcard" hidden>
+        <h2>Upload your ID</h2>
+        <p style="margin:0;color:#555;font-size:.9rem">Take a clear photo of the front and back of your national ID. Only the Chairman can see it.</p>
+        <label>National ID: front</label>
+        <div class="pkrow"><button type="button" class="sm" data-cam="lifc">📷 Take photo</button><button type="button" class="sm" data-cam="lif">🖼 Choose from gallery</button> <small id="lifs" style="color:#2e7d32;font-weight:700"></small><input id="lif" class="pk" data-b="lif" type="file" accept="image/*" hidden><input id="lifc" class="pk" data-b="lif" type="file" accept="image/*" capture="environment" hidden></div>
+        <label>National ID: back</label>
+        <div class="pkrow"><button type="button" class="sm" data-cam="libc">📷 Take photo</button><button type="button" class="sm" data-cam="lib">🖼 Choose from gallery</button> <small id="libs" style="color:#2e7d32;font-weight:700"></small><input id="lib" class="pk" data-b="lib" type="file" accept="image/*" hidden><input id="libc" class="pk" data-b="lib" type="file" accept="image/*" capture="environment" hidden></div>
+        <button id="lidbtn">Save my ID</button>
+      </div>
+
+      <!-- MY POSTS -->
+      <div class="card">
+        <h2>My recent posts</h2>
+        <div id="mine"></div>
+      </div>
+    </div> 
+
+    <!-- CHAIRMAN TOOLS (shown only to a logged-in Chairman) -->
+    <div class="card" id="ccard" hidden>
+      <h2>Chairman tools</h2>
+      <p style="margin:0;color:#555;font-size:.9rem">Set leaders' PINs and sign off the accounts. Use the Chairman's PIN.</p> 
+      <div id="clock">
+        <input id="cpin" type="password" inputmode="numeric" placeholder="Chairman PIN">
+        <button id="cbtn" class="dark">Open Chairman tools</button>
+      </div> 
+      <div id="ct" hidden>
+        <b>Leaders</b>
+        <div id="ll"></div>
+        <b style="display:block;margin-top:12px">Accounts to sign off</b>
+        <div id="cl"></div>
+        <div style="margin-top:10px">
+          <b>Download all accounts</b><br>
+          <button class="sm" id="cpdf">PDF</button>
+          <button class="sm" id="ccsv">Spreadsheet (CSV)</button>
+          <div id="cres"></div>
+        </div>
+      </div>
+    </div> 
+  </main>
+
+  <div id="toast"></div> 
+
+  <script src="/pdf.js"></script> 
+  <script src="/branding.js"></script>
+
+  <script> 
+    const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); 
+    let tok = null, ctok = null, can = {}; 
+
+    function toast(m, ok = true) { 
+      const t = $('toast'); 
+      t.textContent = m; 
+      t.style.background = ok ? '#2e7d32' : '#c62828'; 
+      t.style.display = 'block'; 
+      clearTimeout(t._h); 
+      t._h = setTimeout(() => t.style.display = 'none', 4500); 
+    } 
+
+    async function api(p, o = {}, t = tok) { 
+      const r = await fetch(p, { ...o, headers: { 'Content-Type': 'application/json', ...(t ? { 'x-admin-token': t } : {}) } }); 
+      const d = await r.json().catch(() => ({})); 
+      if (!r.ok) throw new Error(d.error || 'Request failed'); 
+      return d; 
+    } 
+
+    const post = (p, b, t) => api(p, { method: 'POST', body: JSON.stringify(b) }, t); 
+
+    async function act(b, f) { 
+      b.disabled = true; 
+      try { await f(); } catch (e) { toast(e.message, false); } 
+      b.disabled = false; 
+    } 
+
+    const money = n => 'KES ' + Number(n).toLocaleString(); 
+
+    function photo(inp) { 
+      return new Promise(res => { 
+        const f = pickFile(inp); 
+        if (!f) return res(''); 
+        const img = new Image(); 
+        img.onload = () => { 
+          const s = Math.min(1, 1400 / Math.max(img.width, img.height)), c = document.createElement('canvas'); 
+          c.width = img.width * s; 
+          c.height = img.height * s; 
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); 
+          res(c.toDataURL('image/jpeg', 0.7)); 
+        }; 
+        img.onerror = () => res(''); 
+        img.src = URL.createObjectURL(f); 
+      }); 
+    } 
+
+    function enter(d) { 
+      tok = d.token; 
+      can = d.can; 
+      $('who').textContent = d.name; 
+      $('title').textContent = d.title; 
+      $('lpin').value = '';
+      $('login').hidden = true; 
+      $('desk').hidden = false; 
+      $('mcard').hidden = !can.minutes; 
+      $('acard').hidden = !can.accounts; 
+      $('rcard').hidden = !can.remind; 
+      $('idcard').hidden = !!d.hasId; 
+      $('ccard').hidden = !(d.admin && d.admin.role === 'chairman'); 
+      if (can.remind) loadRem(); 
+      $('md').value = $('adt').value = new Date().toISOString().slice(0, 10); 
+      loadMine().catch(() => { 
+        try { sessionStorage.removeItem('leader'); } catch {} 
+        $('desk').hidden = true; 
+        $('login').hidden = false; 
+        toast('Please log in again.', false); 
+      }); 
+      if (can.accounts) { 
+        loadAcctSetup(); 
+        loadLedger().catch(() => {}); 
+      } 
+    } 
+
+    $('lbtn').onclick = e => act(e.target, async () => { 
+      const d = await post('/api/leader/login', { phone: $('lp').value, pin: $('lpin').value }, null); 
+      try { 
+        sessionStorage.setItem('leader', JSON.stringify(d)); 
+        if (d.admin) { 
+          sessionStorage.setItem('tok', d.admin.token); 
+          sessionStorage.setItem('role', d.admin.role); 
+        } 
+      } catch {} 
+      enter(d); 
+    }); 
+
+    try { 
+      const d = JSON.parse(sessionStorage.getItem('leader') || 'null'); 
+      if (d && d.token) enter(d); 
+    } catch {} 
+
+    $('out').onclick = () => { 
+      try { sessionStorage.removeItem('leader'); } catch {} 
+      tok = null; ctok = null; 
+      $('ccard').hidden = true; 
+      $('ct').hidden = true; 
+      $('clock').hidden = false; 
+      $('desk').hidden = true; 
+      $('login').hidden = false; 
+    }; 
+
+    $('lidbtn').onclick = e => act(e.target, async () => {
+      const f = await photo($('lif')), b = await photo($('lib'));
+      if (!f || !b) throw new Error('Take both the front and the back of your ID.');
+      await post('/api/leader/id', { idFront: f, idBack: b });
+      $('idcard').hidden = true; resetPk();
+      try { const d = JSON.parse(sessionStorage.getItem('leader') || 'null'); if (d) { d.hasId = true; sessionStorage.setItem('leader', JSON.stringify(d)); } } catch {}
+      toast('ID saved. Thank you.');
+    });
+
+
+// --- Photo fields: "Take photo" opens the camera, "Choose from gallery" opens the photo picker.
+function pickFile(inp) { if (inp.files && inp.files[0]) return inp.files[0]; const c = document.getElementById(inp.id + 'c'); return c && c.files && c.files[0]; }
+function resetPk() { document.querySelectorAll('.pk').forEach(i => i.value = ''); document.querySelectorAll('.pkrow small').forEach(s => s.textContent = ''); }
+document.addEventListener('click', e => { const b = e.target.closest('[data-cam]'); if (b) document.getElementById(b.dataset.cam).click(); });
+document.addEventListener('change', e => {
+  const i = e.target; if (!i.classList || !i.classList.contains('pk')) return;
+  const sib = document.getElementById(i.id === i.dataset.b ? i.dataset.b + 'c' : i.dataset.b);
+  if (i.files[0] && sib) sib.value = '';
+  const st = document.getElementById(i.dataset.b + 's'); if (st) st.textContent = i.files[0] ? '✓ Photo ready' : '';
+});
+    // --- My recent posts (the Chairman sees every leader's posts). Edit and delete.
+    let myPosts = [];
+    async function loadMine() { 
+      myPosts = await api('/api/leader/posts'); 
+      $('mine').innerHTML = myPosts.map(x => `<div class="row" id="p-${x.id}"><b>${esc(x.title)}</b><br><small>${x.type === 'minutes' ? 'Minutes' : 'Notice'} · ${esc(x.date)} · ${esc(x.author)}${x.edited ? ' · edited' : ''}</small><br><button class="sm" onclick="editPost('${x.id}')">Edit</button><button class="sm dark" onclick="delPost('${x.id}')">Delete</button></div>`).join('') || '<small>Nothing posted yet.</small>'; 
+    } 
+
+    window.editPost = id => {
+      const x = myPosts.find(p => p.id === id); if (!x) return;
+      $('p-' + id).innerHTML = `<label>Title</label><input id="et" value="${esc(x.title)}"><label>Details</label><textarea id="eb" rows="5">${esc(x.body)}</textarea>${x.hasImage ? '<label><input type="checkbox" id="er" style="width:auto"> Remove current photo</label>' : ''}<label>${x.hasImage ? 'Replace photo (optional)' : 'Add photo (optional)'}</label><div class="pkrow"><button type="button" class="sm" data-cam="eic">📷 Take photo</button><button type="button" class="sm" data-cam="ei">🖼 Choose from gallery</button> <small id="eis" style="color:#2e7d32;font-weight:700"></small><input id="ei" class="pk" data-b="ei" type="file" accept="image/*" hidden><input id="eic" class="pk" data-b="ei" type="file" accept="image/*" capture="environment" hidden></div><button class="sm" id="es">Save</button><button class="sm dark" onclick="loadMine()">Cancel</button>`;
+      $('es').onclick = e => act(e.target, async () => {
+        await post(`/api/leader/post/${id}/edit`, { title: $('et').value, body: $('eb').value, image: await photo($('ei')), removeImage: !!($('er') && $('er').checked) });
+        toast('Saved.'); loadMine();
+      });
+    };
+
+    window.delPost = id => confirm('Delete this post? Members will no longer see it. This cannot be undone.') &&
+      post(`/api/leader/post/${id}/delete`, {}).then(() => { toast('Deleted.'); loadMine(); }).catch(e => toast(e.message, false));
+
+    $('nbtn').onclick = e => act(e.target, async () => { 
+      await post('/api/leader/post', { type: 'notice', title: $('nt').value, body: $('nb').value, image: await photo($('ni')) });
+      $('nt').value = $('nb').value = ''; resetPk(); 
+      toast('Notice posted.'); 
+      loadMine(); 
+    }); 
+
+    $('mbtn').onclick = e => act(e.target, async () => { 
+      await post('/api/leader/post', { type: 'minutes', title: $('mt').value, date: $('md').value, body: $('mb').value, image: await photo($('mi')) });
+      $('mt').value = $('mb').value = ''; resetPk(); 
+      toast('Minutes posted.'); 
+      loadMine(); 
+    }); 
+
+    let ledgerData = null, chairLedger = null, cfg = { cats: { in: [], out: [] } }; 
+
+    function fillCats() { 
+      $('acat').innerHTML = (cfg.cats[$('ak').value] || []).map(c => `<option>${esc(c)}</option>`).join(''); 
+    } 
+
+    $('ak').onchange = fillCats; 
+
+    async function loadAcctSetup() { 
+      try { 
+        cfg = await api('/api/config'); 
+        fillCats(); 
+        const cs = await api('/api/leader/cases'); 
+        $('acase').innerHTML = '<option value="">Not linked to a case</option>' + cs.map(c => `<option value="${c.id}">${esc(c.title)}${c.status === 'Open' ? '' : ' (closed)'}</option>`).join(''); 
+      } catch {} 
+    } 
+
+    const fil = d => d.entries.filter(x =>
+      (!$('xf').value || x.date >= $('xf').value) &&
+      (!$('xt').value || x.date <= $('xt').value));
+
+    $('xpdf').onclick = () => ledgerData && MwePdf.deliver($('xres'), MwePdf.accountsPdf(fil(ledgerData), ledgerData.cases, $('xf').value, $('xt').value, 'Welfare accounts'), 'welfare-accounts.pdf', 'application/pdf'); 
+    $('xcsv').onclick = () => ledgerData && MwePdf.deliver($('xres'), MwePdf.accountsCsv(fil(ledgerData)), 'welfare-accounts.csv', 'text/csv'); 
+    $('cpdf').onclick = () => chairLedger && MwePdf.deliver($('cres'), MwePdf.accountsPdf(chairLedger.entries, chairLedger.cases, '', '', 'Welfare accounts'), 'welfare-accounts.pdf', 'application/pdf'); 
+    $('ccsv').onclick = () => chairLedger && MwePdf.deliver($('cres'), MwePdf.accountsCsv(chairLedger.entries), 'welfare-accounts.csv', 'text/csv'); 
+
+    async function loadLedger() { 
+      const d = await api('/api/leader/ledger'); 
+      ledgerData = d; 
+      $('ti').textContent = money(d.totalIn);
+      $('to').textContent = money(d.totalOut); 
+      $('tb').textContent = money(d.balance);
+      $('al').innerHTML = d.entries.map(x => `<div class="row" style="${x.reversed ? 'opacity:.5;text-decoration:line-through' : ''}"><span class="${x.kind}">${x.kind === 'in' ? '+' : '−'} ${money(x.amount)}</span> ${esc(x.desc)}<br><small>${esc(x.date)} · ${esc(x.category || 'Uncategorised')}${x.caseTitle ? ' · ' + esc(x.caseTitle) : ''}${x.signed ? ' · ✔ signed by Chairman' : ''}</small>${!x.reversed && !x.corrects ? ` <button class="sm dark" onclick="rev('${x.id}')">Reverse</button>` : ''}</div>`).join('') || '<small>No entries yet.</small>'; 
+    } 
+
+    $('abtn').onclick = e => act(e.target, async () => { 
+      await post('/api/leader/ledger', { kind: $('ak').value, category: $('acat').value, caseId: $('acase').value, amount: $('aa').value, desc: $('ad').value, date: $('adt').value }); 
+      $('aa').value = $('ad').value = ''; 
+      toast('Entry added.'); 
+      loadLedger(); 
+    }); 
+
+    window.rev = id => confirm('Reverse this entry? A correcting entry will be added.') && post(`/api/leader/ledger/${id}/reverse`, {}).then(() => { 
+      toast('Reversed.'); 
+      loadLedger(); 
+    }).catch(e => toast(e.message, false)); 
+
+    const sentKey = (c, p) => 'mwe_rem_' + c + '_' + p, wasSent = (c, p) => { 
+      try { return localStorage.getItem(sentKey(c, p)); } catch { return null; } 
+    }; 
+
+    window.markSent = (c, p, el) => { 
+      try { localStorage.setItem(sentKey(c, p), new Date().toISOString().slice(0, 10)); } catch {} 
+      el.classList.add('done'); 
+      el.textContent = '✓ Sent, tap to resend'; 
+    }; 
+
+    function remMsg(c, name, cfg) { 
+      const due = new Date(c.due + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); 
+      const amt = c.late ? `KES ${c.owed} (includes 50% interest because the due date has passed)` : `KES ${c.levy}`; 
+      return `${name ? 'Hello ' + name.split(' ')[0] + ',' : 'Hello members,'} reminder from MWEJUSTWO welfare: ${c.title}. Levy ${amt}, ${c.late ? 'was due on' : 'due on'} ${due}. Pay by M-Pesa to ${cfg.payNo} (${cfg.payName}), then enter the M-Pesa code in the app: ${location.origin}. Thank you.`; 
+    } 
+
+    async function loadRem() { 
+      try { 
+        const d = await api('/api/leader/reminders'); 
+        $('rlist').innerHTML = (d.scope === 'All' ? '' : `<small>Showing ${esc(d.scope)} zone members only.</small>`) + (d.cases.map(c => `<div class="row"><b>${esc(c.title)}</b><br><small>Due ${esc(c.due)} · KES ${c.owed}${c.late ? ' (late, +50%)' : ''} · ${c.unpaid.length} of ${c.total} not yet paid</small><br> <a class="wa" target="_blank" href="https://wa.me/?text=${encodeURIComponent(remMsg(c, '', d))}">📣 Share group reminder</a> ${c.unpaid.map(m => `<div style="margin-top:8px"><span>${esc(m.name)}</span> <small>${esc(m.zone)} · 0${esc(m.phone.slice(3))}</small><br><a class="wa ${wasSent(c.id, m.phone) ? 'done' : ''}" target="_blank" href="https://wa.me/${m.phone}?text=${encodeURIComponent(remMsg(c, m.name, d))}" onclick="markSent('${c.id}','${m.phone}',this)">${wasSent(c.id, m.phone) ? '✓ Sent ' + esc(wasSent(c.id, m.phone)) + ', tap to resend' : '💬 Send reminder'}</a></div>`).join('')}</div>`).join('') || '<small>No open welfare cases right now.</small>'); 
+      } catch (e) { 
+        $('rlist').textContent = e.message; 
+      } 
+    } 
+
+    $('cbtn').onclick = e => act(e.target, async () => { 
+      const d = await post('/api/admin/login', { pin: $('cpin').value }, null); 
+      if (d.role !== 'chairman') throw new Error('Chairman PIN only.'); 
+      ctok = d.token; 
+      $('cpin').value = '';
+      $('clock').hidden = true; 
+      $('ct').hidden = false; 
+      loadChair(); 
+    }); 
+
+    async function loadChair() { 
+      const L = await api('/api/admin/leaders', {}, ctok), d = await api('/api/admin/ledger', {}, ctok); 
+      chairLedger = d; 
+      $('ll').innerHTML = L.filter(l => !l.dismissed).map(l => `<div class="row"><b>${esc(l.name)}</b> <small>${esc(l.role)} · ${l.hasPin ? 'PIN set' : 'no PIN yet'}</small><br><button class="sm" onclick="setPin('${l.id}')">${l.hasPin ? 'Change PIN' : 'Set PIN'}</button></div>`).join(''); 
+      $('cl').innerHTML = d.entries.filter(x => !x.signed).map(x => `<div class="row"><span class="${x.kind}">${x.kind === 'in' ? '+' : '−'} ${money(x.amount)}</span> ${esc(x.desc)}<br><small>${esc(x.date)}</small> <button class="sm" onclick="sign('${x.id}')">Sign off</button></div>`).join('') || '<small>Everything is signed off.</small>'; 
+    } 
+
+    window.setPin = i => { 
+      const p = prompt('New PIN for this leader (4 to 6 digits). Give it to them privately.'); 
+      if (p) post(`/api/admin/leaders/${i}/setpin`, { pin: p }, ctok).then(() => { 
+        toast('PIN saved.'); 
+        loadChair(); 
+      }).catch(e => toast(e.message, false)); 
+    }; 
+
+    window.sign = id => post(`/api/admin/ledger/${id}/signoff`, {}, ctok).then(loadChair).catch(e => toast(e.message, false)); 
+  </script>
+</body>
+</html>
