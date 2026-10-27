@@ -1,462 +1,785 @@
-// MWEJUSTWO backend: registration, directory, M-Pesa STK push, chairman admin.
-const express = require('express'), cors = require('cors'), fs = require('fs'), path = require('path'), crypto = require('crypto');
-const app = express(); app.use(cors()); app.use(express.json({ limit: '8mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
-// Lets the Android app (APK) open full screen without a browser bar: paste the JSON from PWABuilder into the ASSETLINKS_JSON setting in Render.
-app.get('/.well-known/assetlinks.json', (_, res) => process.env.ASSETLINKS_JSON ? res.type('json').send(process.env.ASSETLINKS_JSON) : res.sendStatus(404));
+<!DOCTYPE html> 
+<html lang="en">
+<head>
+<meta charset="utf-8"> 
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"> 
+<meta name="theme-color" content="#004d40">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon-192.png"> 
+<title>MWEJUSTWO Welfare</title> 
+<style> 
+:root{--g:#004d40;--g2:#00695c;--gold:#d4af37;--bg:#eeeeee;--ink:#222} 
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh} 
+.view{display:none;padding-bottom:90px;min-height:100vh}.view.on{display:block} 
+.top{background:var(--g);color:#fff;padding:22px 18px;display:flex;align-items:center;gap:12px}.top h3{margin:0;font-size:1.2rem} 
+.av{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.2);display:grid;place-items:center;font-size:1.4rem} 
+.pad{padding:18px}h2{margin:6px 0 14px}.center{text-align:center} 
+input,select{width:100%;padding:14px;border:1px solid #ddd;border-radius:14px;font-size:1rem;background:#fff;margin:6px 0 10px} 
+label{font-weight:600;font-size:.9rem} 
+.btn{width:100%;padding:14px;border:0;border-radius:10px;font-size:1.05rem;font-weight:700;background:var(--g);color:#fff;margin-top:8px;cursor:pointer} 
+.btn:disabled{background:#9e9e9e;color:#666;cursor:not-allowed}
+.gold{background:var(--gold);color:#222}.ghost{background:none;color:var(--g);text-decoration:underline;font-weight:600} 
+.card{background:var(--g2);color:#fff;border-radius:24px;padding:22px;margin:18px;box-shadow:0 6px 16px rgba(0,77,64,.3)} 
+.card .big{font-size:2rem;font-weight:700;margin:6px 0 16px} 
+.acts{display:flex;justify-content:space-between}.acts button{background:none;border:0;color:#fff;font-size:.8rem;text-align:center;cursor:pointer} 
+.acts span{display:grid;place-items:center;width:52px;height:52px;border-radius:16px;background:rgba(255,255,255,.2);font-size:1.4rem;margin:0 auto 4px} 
+.dots{text-align:center;color:#bbb;margin-top:-6px}.dots b{color:var(--gold)} 
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 18px} 
+.tile{background:#fff;border-radius:18px;padding:16px 12px;display:flex;align-items:center;gap:10px;font-weight:600;border:0;text-align:left;font-size:.95rem;cursor:pointer} 
+.tile i{font-style:normal;font-size:1.5rem;background:#fdf3d8;border-radius:12px;width:44px;height:44px;display:grid;place-items:center;flex:none} 
+.row{background:#fff;border-radius:14px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;gap:10px;align-items:center} 
+.row small{color:#666}.badge{padding:2px 9px;border-radius:10px;font-size:.78rem;background:#eee}.Paid,.Verified{background:#c8e6c9}.Pending,.Awaiting{background:#fff3cd}.Failed{background:#f8d7da} 
+nav{position:fixed;left:0;right:0;bottom:0;background:#fff;display:none;justify-content:space-around;padding:8px 4px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -2px 10px rgba(0,0,0,.1);z-index:10} 
+nav.on{display:flex}nav button{border:0;background:none;font-size:.75rem;color:#555;padding:8px 14px;border-radius:24px;cursor:pointer}nav button.a{background:var(--g);color:#fff;font-weight:700}nav span{display:block;font-size:1.3rem} 
+.notice{background:#fdf6dc;border-left:5px solid var(--gold);padding:12px;margin-bottom:14px;border-radius:6px;font-size:.88rem;line-height:1.4} 
+#toast{position:fixed;left:12px;right:12px;bottom:84px;padding:12px;border-radius:10px;color:#fff;display:none;z-index:99} 
+.acts button{position:relative}.acts .newb{position:absolute;top:-6px;right:-2px;margin:0}
+.mcount{transition:color .3s}.mcount.pulse{color:var(--gold)}
+.ac{flex:1;text-align:center;color:#fff;font-size:.8rem}.ac b{font-size:.85rem}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:8px}
+.stat{background:#fff;border-radius:16px;padding:14px 8px;text-align:center;border:0;cursor:pointer;font-family:inherit}
+.stat b{display:block;font-size:1.6rem;color:var(--g)}
+.stat span{font-size:.78rem;color:#555}
+.stat.hot b{color:#c62828}
+#pop{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;padding:18px;z-index:200}
+#pop.on{display:flex}
+#pop .pc{background:#fff;border-radius:20px;padding:20px;max-width:420px;width:100%;max-height:80vh;overflow:auto;border-top:6px solid var(--gold)}
+#pop h3{margin:0 0 10px;color:var(--g)}
+#pop .it{background:#f3f6f5;border-radius:12px;padding:10px 12px;margin-bottom:8px;font-size:.92rem}
+#pop .it small{color:#666}
+.newb{background:#c62828;color:#fff;border-radius:8px;font-size:.65rem;padding:1px 6px;margin-left:6px}.wave{position:fixed;bottom:0;left:0;width:100%;height:110px;z-index:-1} 
+</style>
+</head>
+<body> 
 
-// --- storage (JSON file). On Render free tier disk resets: attach a disk or swap for Supabase/MongoDB.
-const FILE = process.env.DATA_FILE || path.join(__dirname, 'data.json');   // only used if Supabase is not configured
-const ZONES = ['Thiba', 'Murinduko'];
-const DEFAULT_LEADERS = [
-  { name: 'Samuel Mwangi', role: 'Chairman', phone: '0728065957' }, { name: 'Ellah Muthoni', role: 'Vice Chairperson', phone: '0704710176' },
-  { name: 'Dennis Bundi', role: 'Secretary', phone: '0717829021' }, { name: 'Sarah Muringo', role: 'Vice Secretary', phone: '0707422653' },
-  { name: 'Edwin Njagi', role: 'Treasurer', phone: '0704436780' }, { name: 'Bonface Ndambiri', role: 'Organizing Secretary', phone: '0728508108' },
-  { name: 'Jane Muriithi', role: 'Thiba Zone Representative', phone: '0729668617' }, { name: 'Antony Ndumbi', role: 'Murinduko Zone Representative', phone: '0748793533' },
-  { name: 'Charles Kariuki', role: 'PLWD Representative', phone: '0751577974' }];
+<!-- LOGIN VIEW -->
+<div class="view on" id="v-login">
+  <div class="pad center" style="padding-top:50px"> 
+    <h2 id="greet" style="font-size:1.6rem"></h2> 
+    <svg width="130" height="130" viewBox="0 0 120 120">
+      <circle cx="60" cy="60" r="52" fill="none" stroke="#004d40" stroke-width="7" stroke-dasharray="250 80" stroke-linecap="round"/>
+      <circle cx="60" cy="60" r="38" fill="none" stroke="#d4af37" stroke-width="5" stroke-dasharray="150 90" stroke-linecap="round"/>
+      <g fill="#004d40"><circle cx="44" cy="52" r="7"/><circle cx="76" cy="52" r="7"/></g>
+      <circle cx="60" cy="46" r="8" fill="#d4af37"/>
+      <path d="M34 82q10-22 20-6M66 76q10-16 20 6M48 84q12-26 24 0" stroke="#004d40" stroke-width="6" fill="none" stroke-linecap="round"/>
+    </svg> 
+    <p style="color:#555">Enter your phone number and PIN to login</p> 
+    <p style="color:var(--g);font-weight:600;margin:0 0 10px">👥 <span class="mcount">–</span> members and counting</p>
+    <input id="lp" type="tel" placeholder="Phone number (07XXXXXXXX)" style="text-align:left"> 
+    <div style="position:relative">
+      <input id="lpin" type="password" inputmode="numeric" maxlength="6" placeholder="🔒 PIN">
+      <span id="eye" style="position:absolute;right:14px;top:20px;cursor:pointer">👁</span>
+    </div> 
+    <button class="btn" id="lbtn">LOGIN</button> 
+    <div style="text-align:right">
+      <button class="ghost btn" style="width:auto;background:none;color:#222;text-decoration:none;font-weight:500;padding:6px" id="forgot">Forgot PIN?</button>
+    </div> 
+    <button class="btn gold" id="quickpay" style="margin-top:22px">💳 PAY WELFARE LEVY</button> 
+    <button class="btn ghost" id="toreg">New member? Register here</button>
+  </div>
+</div> 
 
-// --- storage: Supabase (permanent) via REST. Whole app data is one JSON row in mwe_store; certificate photos go in mwe_files.
-const SB_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, ''), SB_KEY = process.env.SUPABASE_KEY || '', USE_SB = !!(SB_URL && SB_KEY);
-const sb = async (p, opts = {}) => {
-  const r = await fetch(SB_URL + '/rest/v1/' + p, { ...opts, headers: { apikey: SB_KEY, ...(SB_KEY.startsWith('eyJ') ? { Authorization: 'Bearer ' + SB_KEY } : {}), 'Content-Type': 'application/json', ...(opts.headers || {}) } });
-  if (!r.ok) throw new Error('Supabase ' + r.status + ' ' + (await r.text()).slice(0, 200));
-  return r.json().catch(() => null);
-};
-let db = { members: [], payments: [], cases: [] };
-async function loadDb() {
-  if (USE_SB) { const rows = await sb('mwe_store?key=eq.main&select=value'); if (rows && rows[0]) db = rows[0].value; console.log('Data loaded from Supabase'); }
-  else { console.log('WARNING: SUPABASE_URL / SUPABASE_KEY not set. Using a local file; data is LOST when Render redeploys.'); if (fs.existsSync(FILE)) db = JSON.parse(fs.readFileSync(FILE)); }
-  db.members = db.members || []; db.payments = db.payments || []; db.cases = db.cases || []; db.certNames = db.certNames || []; db.posts = db.posts || []; db.ledger = db.ledger || []; db.postImgs = db.postImgs || []; db.idNames = db.idNames || []; db.leaders = db.leaders || DEFAULT_LEADERS;
-  let newIds = false; db.leaders.forEach(l => { if (!l.id) { l.id = crypto.randomUUID(); newIds = true; } }); if (newIds) save();
-}
-let dirty = false, saving = false, timer = null;
-async function flush() {
-  if (saving) return; saving = true;
-  try { while (dirty) { dirty = false;
-    if (USE_SB) await sb('mwe_store', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ key: 'main', value: db }) });
-    else fs.writeFileSync(FILE, JSON.stringify(db, null, 2)); } }
-  catch (e) { console.error('SAVE FAILED:', e.message); dirty = true; setTimeout(flush, 5000); }
-  saving = false;
-}
-const save = () => { dirty = true; clearTimeout(timer); timer = setTimeout(flush, 300); };
-process.on('SIGTERM', async () => { clearTimeout(timer); while (saving) await new Promise(r => setTimeout(r, 100)); await flush(); process.exit(0); });
+<!-- STAFF VIEW -->
+<div class="view" id="v-staff">
+  <div class="top">
+    <div class="av">🛠</div>
+    <div>
+      <div>Welcome</div>
+      <h3 id="sn"></h3>
+      <small id="st"></small>
+    </div>
+  </div>
+  <div class="pad"> 
+    <button class="btn" id="sadmin" hidden onclick="location.href='/officials.html'">👥 Members, payments &amp; cases</button> 
+    <button class="btn gold" onclick="location.href='/leaders.html'">📝 Leaders' Desk (post, accounts, reminders)</button> 
+    <button class="btn" id="smem" hidden data-go="home">📱 My member view</button> 
+    <button class="btn" id="sout" style="background:#c62828">Log out</button>
 
-const normPhone = p => { p = String(p || '').replace(/\D/g, ''); if (/^0[17]\d{8}$/.test(p)) return '254' + p.slice(1); if (/^254[17]\d{8}$/.test(p)) return p; return null; };
-const clean = s => String(s || '').trim().replace(/[<>]/g, '').slice(0, 80);
+    <div style="margin-top:22px;font-weight:700;font-size:1.05rem">At a glance</div>
+    <div id="glance" class="stats"><div class="notice" style="grid-column:1/-1">Loading…</div></div>
 
-// --- admin sessions (roles: chairman, treasurer)
-const sessions = new Map();
-const admin = (...roles) => (req, res, next) => {
-  const x = sessions.get(req.headers['x-admin-token']);
-  if (x && x.exp > Date.now() && roles.includes(x.role) && (x.role !== 'leader' || db.leaders.some(l => l.id === x.lid && !l.dismissed))) { req.role = x.role; req.sess = x; return next(); }
-  res.status(401).json({ error: 'Not allowed for your role' });
-};
-const same = (a, b) => a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
-let fails = 0, lockUntil = 0;
-app.post('/api/admin/login', (req, res) => {
-  if (Date.now() < lockUntil) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
-  const pin = String(req.body.pin || ''), pins = { chairman: String(process.env.ADMIN_PIN || ''), treasurer: String(process.env.TREASURER_PIN || '') };
-  const role = ['chairman', 'treasurer'].find(r => pins[r] && same(pin, pins[r]));
-  if (!role) { if (++fails >= 5) { lockUntil = Date.now() + 5 * 60000; fails = 0; } return res.status(403).json({ error: 'Wrong PIN' }); }
-  fails = 0; const t = crypto.randomBytes(24).toString('hex'); sessions.set(t, { role, exp: Date.now() + 2 * 3600e3 }); res.json({ token: t, role });
-});
+    <div style="margin:18px 0 6px;font-weight:700;font-size:1.05rem">Quick links</div>
+    <button class="btn ghost" style="text-decoration:none;background:#fff;color:var(--g);text-align:left" onclick="location.href='/constitution.html'">📜 Our Constitution</button>
+    <button class="btn ghost" style="text-decoration:none;background:#fff;color:var(--g);text-align:left" onclick="location.href='/leaders.html'">📢 Post a notice</button>
+  </div>
+</div> 
 
-// --- members
-app.get('/api/health', (_, res) => res.json({ ok: true, storage: USE_SB ? 'supabase' : 'local file (not permanent)' }));
-app.get('/api/members', (_, res) => res.json(db.members.filter(m => m.status !== 'Dismissed').map(m => ({ id: m.id, name: m.name, school: m.school, zone: m.zone || '', status: m.status }))));
-// Public tally: every registered member who has not been dismissed, plus any official who is not registered as a member (officials are members too). Numbers only.
-app.get('/api/stats', (_, res) => {
-  const ms = db.members.filter(m => m.status !== 'Dismissed'), phones = new Set(ms.flatMap(m => phonesOf(m)));
-  const extra = db.leaders.filter(l => !l.dismissed && !phones.has(normPhone(l.phone))).length;
-  res.json({ members: ms.length + extra, verified: ms.filter(m => m.status === 'Verified').length });
-});
-app.post('/api/members', async (req, res) => {
-  const name = clean(req.body.name), school = clean(req.body.school), phone = normPhone(req.body.phone);
-  if (name.length < 3 || !school) return res.status(400).json({ error: 'Enter your full name and school/zone.' });
-  if (!phone) return res.status(400).json({ error: 'Enter a valid Safaricom/Airtel number, e.g. 0712345678.' });
-  const zone = ZONES.includes(req.body.zone) ? req.body.zone : null;
-  if (!zone) return res.status(400).json({ error: 'Choose your zone: Thiba or Murinduko.' });
-  const regNo = clean(req.body.regNo).toUpperCase().slice(0, 20), idNo = clean(req.body.idNo).replace(/\s/g, '').slice(0, 15);
-  if (regNo.length < 3) return res.status(400).json({ error: 'Enter your registration number.' });
-  if (!/^\d{6,10}$/.test(idNo)) return res.status(400).json({ error: 'Enter your national ID number (digits only).' });
-  const pin = String(req.body.pin || '');
-  if (!/^\d{4,6}$/.test(pin)) return res.status(400).json({ error: 'Choose a PIN of 4 to 6 digits. You will use it to edit your next of kin.' });
-  if (!req.body.idFront || !req.body.idBack) return res.status(400).json({ error: 'Take clear photos of the front and back of your ID card.' });
-  if (db.members.some(m => m.phone === phone)) return res.status(409).json({ error: 'This phone number is already registered.' });
-  if (db.members.some(m => m.idNo === idNo)) return res.status(409).json({ error: 'This ID number is already registered.' });
-  if (db.members.some(m => m.regNo === regNo)) return res.status(409).json({ error: 'This registration number is already registered.' });
-  let idFront = '', idBack = '';
-  try { idFront = await putId(req.body.idFront); idBack = await putId(req.body.idBack); }
-  catch (e) { await dropId(idFront); return res.status(400).json({ error: idErr(e) }); }
-  db.members.push({ id: crypto.randomUUID(), name, school, zone, phone, regNo, idNo, idFront, idBack, idAt: new Date().toISOString(), status: 'Pending', pinHash: hashPin(pin), kin: [], kinLocked: false, created: new Date().toISOString() }); save();
-  res.json({ message: 'Registered. The Chairman will verify your membership.' });
-});
-app.get('/api/admin/members', admin('chairman'), (_, res) => res.json(db.members.map(({ pinHash, kin, ...m }) => ({ ...m, kinCount: (kin || []).length, kinLocked: !!m.kinLocked }))));
-app.post('/api/admin/members/:id/edit', admin('chairman'), (req, res) => {
-  const m = db.members.find(x => x.id === req.params.id); if (!m) return res.sendStatus(404);
-  const name = clean(req.body.name), school = clean(req.body.school), phone = normPhone(req.body.phone), zone = ZONES.includes(req.body.zone) ? req.body.zone : null;
-  const regNo = clean(req.body.regNo).toUpperCase().slice(0, 20), idNo = clean(req.body.idNo).replace(/\s/g, '').slice(0, 15);
-  if (name.length < 3 || !school) return res.status(400).json({ error: 'Enter the full name and working station.' });
-  if (!phone) return res.status(400).json({ error: 'Enter a valid phone number.' });
-  if (!zone) return res.status(400).json({ error: 'Choose Thiba or Murinduko.' });
-  if (regNo.length < 3) return res.status(400).json({ error: 'Enter the registration number.' });
-  if (!/^\d{6,10}$/.test(idNo)) return res.status(400).json({ error: 'Enter the national ID number (digits only).' });
-  const others = db.members.filter(x => x !== m);
-  if (others.some(x => phonesOf(x).includes(phone))) return res.status(409).json({ error: 'Another member already uses this phone number.' });
-  if (others.some(x => x.idNo === idNo)) return res.status(409).json({ error: 'Another member already has this ID number.' });
-  if (others.some(x => x.regNo === regNo)) return res.status(409).json({ error: 'Another member already has this registration number.' });
-  if (phone !== m.phone) { m.prevPhones = [...new Set([...(m.prevPhones || []), m.phone])]; m.phone = phone; }   // old number kept so payment history still matches
-  Object.assign(m, { name, school, zone, regNo, idNo }); save(); res.json({ ok: true });
-});
-app.post('/api/admin/members/:id/dismiss', admin('chairman'), (req, res) => { const m = db.members.find(x => x.id === req.params.id); if (!m) return res.sendStatus(404); m.status = 'Dismissed'; m.dismissedAt = new Date().toISOString(); m.dismissReason = clean(req.body.reason); save(); res.json({ ok: true }); });
-app.post('/api/admin/members/:id/reinstate', admin('chairman'), (req, res) => { const m = db.members.find(x => x.id === req.params.id); if (!m) return res.sendStatus(404); m.status = 'Verified'; delete m.dismissedAt; delete m.dismissReason; save(); res.json({ ok: true }); });
-app.post('/api/admin/members/:id/verify', admin('chairman'), (req, res) => { const m = db.members.find(x => x.id === req.params.id); if (!m) return res.sendStatus(404); m.status = 'Verified'; save(); res.json(m); });
-app.delete('/api/admin/members/:id', admin('chairman'), async (req, res) => { const m = db.members.find(x => x.id === req.params.id); if (m) { await dropId(m.idFront); await dropId(m.idBack); } db.members = db.members.filter(x => x.id !== req.params.id); save(); res.json({ ok: true }); });
-app.get('/api/admin/payments', admin('chairman', 'treasurer'), (_, res) => res.json(db.payments.slice().reverse()));
+<!-- REGISTRATION VIEW -->
+<div class="view" id="v-reg">
+  <div class="top">
+    <button class="ghost" style="color:#fff;font-size:1.4rem;text-decoration:none;border:0;cursor:pointer" data-go="login">←</button>
+    <h3>New Member Registration</h3>
+  </div>
+  <div class="pad"> 
+    <div class="notice">
+      <b>Security Notice:</b> Payments are confirmed by the Treasurer, then approved by the Chairman. Verifications, disbursements and password resets are managed by the Chairman.
+    </div>
 
-// --- Next of kin: members edit with phone + PIN until the Chairman locks the list.
-const hashPin = (pin, salt = crypto.randomBytes(8).toString('hex')) => salt + ':' + crypto.scryptSync(String(pin), salt, 32).toString('hex');
-const checkPin = (pin, h) => { if (!h) return false; const [salt, hex] = h.split(':'); return same(crypto.scryptSync(String(pin), salt, 32).toString('hex'), hex); };
-const KIN = { self: ['Principal member'], family: ['Spouse', 'Child', 'Other nuclear family'], parent: ['Father', 'Mother', 'Guardian'] };
-const pinFails = new Map();
-function memberAuth(req, res) {
-  const phone = normPhone(req.body.phone), f = pinFails.get(phone);
-  if (f && f.until > Date.now()) { res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' }); return null; }
-  const m = db.members.find(x => x.phone === phone);
-  if (m && !m.pinHash) { res.status(403).json({ error: 'No PIN set for you yet. Ask the Chairman to set one.' }); return null; }
-  if (!m || !checkPin(req.body.pin, m.pinHash)) { const n = ((f && f.n) || 0) + 1; pinFails.set(phone, { n: n >= 5 ? 0 : n, until: n >= 5 ? Date.now() + 600000 : 0 }); res.status(403).json({ error: 'Wrong phone number or PIN.' }); return null; }
-  if (m.status === 'Dismissed') { res.status(403).json({ error: 'This membership has ended. Please contact the Chairman.' }); return null; }
-  pinFails.delete(phone); return m;
-}
-app.post('/api/kin/get', (req, res) => { const m = memberAuth(req, res); if (m) res.json({ name: m.name, locked: !!m.kinLocked, kin: m.kin || [] }); });
-app.post('/api/kin/save', (req, res) => {
-  const m = memberAuth(req, res); if (!m) return;
-  if (m.kinLocked) return res.status(403).json({ error: 'The Chairman has locked your list. Contact him for changes.' });
-  const out = [];
-  for (const k of (Array.isArray(req.body.kin) ? req.body.kin.slice(0, 30) : [])) {
-    if (!KIN[k.group] || !KIN[k.group].includes(k.relation)) return res.status(400).json({ error: 'Invalid relationship.' });
-    const name = clean(k.name); if (name.length < 3) return res.status(400).json({ error: 'Enter the full name of everyone you list.' });
-    const cert = certOk(k.cert) ? k.cert : '';
-    if (k.relation === 'Child' && !cert) return res.status(400).json({ error: 'Upload the birth certificate for ' + name + ' (child).' });
-    out.push({ group: k.group, relation: k.relation, name, idNo: clean(k.idNo).slice(0, 20), phone: clean(k.phone).slice(0, 15), cert });
+    <label>Full Name</label>
+    <input id="rn" placeholder="e.g. John Mwaura">
+
+    <label>Registration No.</label>
+    <input id="rreg" placeholder="e.g. TSC or registration number">
+
+    <label>ID Number</label>
+    <input id="rid" type="tel" inputmode="numeric" placeholder="National ID number">
+
+    <label>Zone</label>
+    <select id="rzone">
+      <option value="">Choose your zone</option>
+      <option value="Thiba">Thiba</option>
+      <option value="Murinduko">Murinduko</option>
+    </select>
+
+    <label>Working Station</label>
+    <input id="rs" placeholder="e.g. Kutus JSS (Thiba)">
+
+    <label>Phone Number</label>
+    <input id="rp" type="tel" placeholder="07XXXXXXXX">
+
+    <label>Create a PIN (4–6 digits)</label>
+    <input id="rpin" type="password" inputmode="numeric" maxlength="6"> 
+
+    <label>National ID: front (required)</label>
+    <div class="pkrow"><button type="button" class="btn" style="width:auto;display:inline-block;margin:4px 6px 4px 0;padding:10px 12px;font-size:.9rem" data-cam="rifc">📷 Take photo</button><button type="button" class="btn" style="width:auto;display:inline-block;margin:4px 6px 4px 0;padding:10px 12px;font-size:.9rem" data-cam="rif">🖼 Choose from gallery</button> <small id="rifs" style="color:#2e7d32;font-weight:700"></small><input id="rif" class="pk" data-b="rif" type="file" accept="image/*" hidden><input id="rifc" class="pk" data-b="rif" type="file" accept="image/*" capture="environment" hidden></div>
+    <label>National ID: back (required)</label>
+    <div class="pkrow"><button type="button" class="btn" style="width:auto;display:inline-block;margin:4px 6px 4px 0;padding:10px 12px;font-size:.9rem" data-cam="ribc">📷 Take photo</button><button type="button" class="btn" style="width:auto;display:inline-block;margin:4px 6px 4px 0;padding:10px 12px;font-size:.9rem" data-cam="rib">🖼 Choose from gallery</button> <small id="ribs" style="color:#2e7d32;font-weight:700"></small><input id="rib" class="pk" data-b="rib" type="file" accept="image/*" hidden><input id="ribc" class="pk" data-b="rib" type="file" accept="image/*" capture="environment" hidden></div>
+    <div class="notice" style="margin-top:6px">Take each photo in good light with all four corners and the text clear. Your ID photos are used only to verify your membership and are seen only by the Chairman.</div>
+
+    <button class="btn" id="regBtn">Register as Member</button>
+    <p class="center" style="color:#666;font-size:.9rem">The Chairman will verify your membership.</p>
+  </div>
+</div> 
+
+<!-- HOME VIEW -->
+<div class="view" id="v-home">
+  <div class="top">
+    <div class="av">👤</div>
+    <div style="flex:1">
+      <div id="hg"></div>
+      <h3 id="hn"></h3>
+    </div>
+    <div class="av" id="hs" title="Status">✔</div>
+  </div> 
+  <div class="card">
+    <div>Welfare Contributions</div>
+    <div style="opacity:.8;font-size:.9rem;margin-top:10px">Total paid &amp; confirmed</div> 
+    <div class="big"><span id="bal">****</span> KSh <span id="hide" style="font-size:1.3rem;float:right;cursor:pointer">🙈</span></div>
+    <div style="margin:-6px 0 14px;font-size:.95rem;opacity:.95">👥 <b class="mcount">–</b> welfare members</div> 
+    <div class="acts">
+      <button data-go="pay"><span>💵</span>Contribute</button>
+      <button data-go="cases"><span>📋</span>Cases</button>
+      <button data-go="stmt"><span>🧾</span>Statement</button>
+      <button onclick="location.href='/officials.html#kin'"><span>👨‍👩‍👧</span>Next of Kin</button>
+    </div>
+  </div> 
+  <div class="dots"><b>●</b> ○ ○</div> 
+  <div class="notice" id="idBanner" hidden style="margin:0 18px 6px">📷 <b>Please upload your ID</b> (front and back) to complete your membership. It takes a minute and you can do it any time.<br><button class="btn gold" style="margin-top:8px;padding:10px" data-go="idup" type="button">Upload my ID</button></div>
+  <div style="padding:16px 18px 8px;font-weight:700;font-size:1.1rem">My Favorites</div> 
+  <div class="grid">
+    <button class="tile" data-go="cases"><i>🆘</i>Pay a Levy</button>
+    <button class="tile" onclick="location.href='/officials.html#kin'"><i>👨‍👩‍👧</i>My Next of Kin</button>
+    <button class="tile" data-go="stmt"><i>🧾</i>My Statement</button>
+    <button class="tile" data-go="dir"><i>👥</i>Member Directory</button>
+    <button class="tile" data-go="lead"><i>🏛</i>Our Leaders</button>
+    <button class="tile" data-go="news"><i>📢</i><span>Notices &amp; Minutes<b class="newb" id="bn" hidden>NEW</b></span></button>
+  </div>
+</div> 
+
+<!-- CASES VIEW -->
+<div class="view" id="v-cases">
+  <div class="top">
+    <div class="av">🛎</div>
+    <div style="flex:1">
+      <div>Welfare</div>
+      <h3>Services</h3>
+    </div>
+  </div>
+  <div class="card">
+    <div>Open Welfare Cases</div>
+    <div style="opacity:.8;font-size:.9rem;margin-top:10px">Waiting for your contribution</div>
+    <div class="big"><span id="openN">–</span></div>
+    <div class="acts">
+      <button data-go="pay"><span>💵</span>Contribute</button>
+      <button data-go="acct"><span>💰</span>Accounts<b class="newb" id="ba" hidden>NEW</b></button>
+      <button onclick="location.href='/constitution.html'"><span>📜</span>Constitution</button>
+      <button data-go="help"><span>🎧</span>Help</button>
+    </div>
+  </div>
+  <div class="dots"><b>●</b> ○ ○</div>
+  <div style="padding:16px 18px 8px;font-weight:700;font-size:1.1rem">Open welfare cases</div>
+  <div class="pad" style="padding-top:4px" id="caselist"></div>
+</div> 
+
+<!-- PAY VIEW -->
+<div class="view" id="v-pay">
+  <div class="top"><h3>Pay Welfare Levy</h3></div>
+  <div class="pad"> 
+    <div class="notice">
+      <b>Step 1:</b> Send money by M-Pesa to <b id="payNo">0702681009</b> (<span id="payName">Edwin Njagi</span>).<br>
+      <b>Step 2:</b> Enter the details below with the code from your M-Pesa SMS.
+    </div> 
+    <label>Phone You Paid From</label><input id="pp" type="tel" placeholder="07XXXXXXXX">
+    <label>Welfare Case</label><select id="pcase"><option value="">General contribution</option></select> 
+    <label>Amount (KES)</label><input id="pa" type="number" value="100">
+    <label>M-Pesa Confirmation Code</label><input id="pc" maxlength="10" placeholder="e.g. SGH7K2L9QX" autocapitalize="characters"> 
+    <button class="btn" id="payBtn">Submit Payment</button>
+    <p class="center" style="color:#666;font-size:.9rem">The Treasurer and Chairman will confirm it.</p>
+  </div>
+</div> 
+
+<!-- LEADERS VIEW -->
+<div class="view" id="v-lead">
+  <div class="top"><h3>Our Leaders</h3></div>
+  <div class="pad">
+    <button class="btn" id="leadToggle" type="button">🏛 View Our Leaders</button>
+    <div id="leadlist" hidden style="margin-top:14px">Loading…</div>
+  </div>
+</div> 
+
+<!-- NEWS VIEW -->
+<div class="view" id="v-news">
+  <div class="top"><h3>Notices &amp; Minutes</h3></div>
+  <div class="pad" id="newslist">Loading…</div>
+</div> 
+
+<!-- ACCOUNTS VIEW -->
+<div class="view" id="v-acct">
+  <div class="top"><h3>Welfare Accounts</h3></div>
+  <div class="pad">
+    <div id="acctsum"></div>
+    <div id="acctlist">Loading…</div>
+  </div>
+</div> 
+
+<!-- STATEMENT VIEW -->
+<div class="view" id="v-stmt">
+  <div class="top"><h3>My Statement</h3></div>
+  <div class="pad" id="stlist"></div>
+</div> 
+
+<!-- DIRECTORY VIEW -->
+<div class="view" id="v-dir">
+  <div class="top"><h3>Member Directory</h3></div>
+  <div class="pad">
+    <button class="btn" id="dirToggle" type="button">👥 View Member Directory</button>
+    <div id="dirBox" hidden style="margin-top:14px">
+      <input id="q" placeholder="🔍 Search by name or school">
+      <div id="dlist">Loading…</div>
+    </div>
+  </div>
+</div> 
+
+<!-- ID UPLOAD VIEW (optional for existing members) -->
+<div class="view" id="v-idup">
+  <div class="top"><h3>Upload your ID</h3></div>
+  <div class="pad">
+    <div class="notice">Take a clear photo of the <b>front</b> and the <b>back</b> of your national ID. Use good light and keep all four corners in the picture. Only the Chairman can see these photos, and they are used only to verify your membership.</div>
+    <label>National ID: front</label>
+    <div class="pkrow"><button type="button" class="btn" style="width:auto;display:inline-block;margin:4px 6px 4px 0;padding:10px 12px;font-size:.9rem" data-cam="uifc">📷 Take photo</button><button type="button" class="btn" style="width:auto;display:inline-block;margin:4px 6px 4px 0;padding:10px 12px;font-size:.9rem" data-cam="uif">🖼 Choose from gallery</button> <small id="uifs" style="color:#2e7d32;font-weight:700"></small><input id="uif" class="pk" data-b="uif" type="file" accept="image/*" hidden><input id="uifc" class="pk" data-b="uif" type="file" accept="image/*" capture="environment" hidden></div>
+    <label>National ID: back</label>
+    <div class="pkrow"><button type="button" class="btn" style="width:auto;display:inline-block;margin:4px 6px 4px 0;padding:10px 12px;font-size:.9rem" data-cam="uibc">📷 Take photo</button><button type="button" class="btn" style="width:auto;display:inline-block;margin:4px 6px 4px 0;padding:10px 12px;font-size:.9rem" data-cam="uib">🖼 Choose from gallery</button> <small id="uibs" style="color:#2e7d32;font-weight:700"></small><input id="uib" class="pk" data-b="uib" type="file" accept="image/*" hidden><input id="uibc" class="pk" data-b="uib" type="file" accept="image/*" capture="environment" hidden></div>
+    <button class="btn" id="idSave" type="button">Save my ID</button>
+  </div>
+</div>
+
+<!-- HELP VIEW -->
+<div class="view" id="v-help">
+  <div class="top"><h3>Help &amp; Support</h3></div>
+  <div class="pad">
+    <div class="row"><div>Forgot your PIN?<br><small>Ask the Chairman to reset it for you.</small></div></div>
+    <div class="row"><div>Payments<br><small>Pay to <span class="pn">0702681009</span> (<span class="pm">Edwin Njagi</span>), then submit the M-Pesa code in the app.</small></div></div>
+    <div class="row"><div>Security<br><small>Never share your PIN. Officials never ask for it.</small></div></div>
+  </div>
+</div> 
+
+<!-- PROFILE VIEW -->
+<div class="view" id="v-prof">
+  <div class="top">
+    <div class="av">👤</div>
+    <h3 id="pn2"></h3>
+  </div>
+  <div class="pad">
+    <div class="row"><div>Phone<br><small id="pph"></small></div></div>
+    <div class="row"><div>Registration No.<br><small id="prg"></small></div></div>
+    <div class="row"><div>Zone<br><small id="pz"></small></div></div>
+    <div class="row"><div>Working Station<br><small id="psc"></small></div></div>
+    <div class="row"><div>Membership<br><small id="pst"></small></div></div> 
+    <button class="btn gold" id="profLead" hidden onclick="location.href='/leaders.html'">📝 Leaders' Desk (post minutes, accounts, notices)</button>
+    <button class="btn gold" id="profOff" hidden onclick="location.href='/officials.html'">🔐 Officials (Chairman / Treasurer)</button>
+    <button class="btn" id="out" style="background:#c62828">Log out</button>
+  </div>
+</div> 
+
+<!-- NAVIGATION -->
+<nav id="nav">
+  <button data-go="home"><span>🏠</span>Home</button>
+  <button data-go="cases"><span>▦</span>Services</button>
+  <button data-go="help"><span>🎧</span>Help</button>
+  <button data-go="prof"><span>👤</span>Profile</button>
+</nav> 
+
+<nav id="snav">
+  <button data-go="staff"><span>🏠</span>Home</button>
+  <button onclick="location.href='/leaders.html'"><span>📝</span>Desk</button>
+  <button id="snOff" hidden onclick="location.href='/officials.html'"><span>👥</span>Officials</button>
+  <button onclick="location.href='/constitution.html'"><span>📜</span>Constitution</button>
+  <button data-go="help"><span>🎧</span>Help</button>
+</nav>
+
+<div id="pop"><div class="pc">
+  <h3 id="popT">What's new</h3>
+  <div id="popL"></div>
+  <button class="btn" id="popGo" type="button">View</button>
+  <button class="btn ghost" id="popX" type="button">Later</button>
+</div></div>
+
+<div id="toast"></div> 
+
+<svg class="wave" viewBox="0 0 400 110" preserveAspectRatio="none">
+  <path d="M0 50 Q100 10 200 40 T400 30 V110 H0Z" fill="#004d40"/>
+</svg> 
+
+<script> 
+const $ = id => document.getElementById(id), esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); 
+let staffUser = null, cred = null, sum = null, cases = [], members = [], hidden = true; 
+const hr = new Date().getHours(), g = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening'; 
+$('greet').textContent = g + ', welcome to MWEJUSTWO!';
+$('hg').textContent = g + ' !'; 
+
+function toast(m, ok = true) { 
+  const t = $('toast'); 
+  t.textContent = m; 
+  t.style.background = ok ? '#2e7d32' : '#c62828'; 
+  t.style.display = 'block'; 
+  clearTimeout(t._h); 
+  t._h = setTimeout(() => t.style.display = 'none', 4500); 
+} 
+
+async function api(p, o = {}) { 
+  const r = await fetch(p, { ...o, headers: { 'Content-Type': 'application/json' } }); 
+  const d = await r.json().catch(() => ({})); 
+  if (!r.ok) throw new Error(d.error || 'Request failed'); 
+  return d; 
+} 
+
+async function act(b, f) { 
+  if (!b) return await f();
+  b.disabled = true; 
+  try { 
+    await f(); 
+  } catch (e) { 
+    toast(e.message || 'Error occurred. Try again.', false); 
+  } 
+  b.disabled = false; 
+} 
+
+const post = (p, b) => api(p, { method: 'POST', body: JSON.stringify(b) }); 
+
+function go(v, fromPop) { 
+  navTrack(v, fromPop);
+  document.querySelectorAll('.view').forEach(x => x.classList.toggle('on', x.id === 'v-' + v)); 
+  $('nav').classList.toggle('on', !!cred && !['login', 'reg'].includes(v)); 
+  $('snav').classList.toggle('on', !cred && !!staffUser && ['staff', 'help'].includes(v)); 
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('a', b.dataset.go === v)); 
+  if (v === 'cases') loadCases(); 
+  if (v === 'dir') loadDir(); 
+  if (v === 'stmt') renderStmt(); 
+  if (v === 'lead') { $('leadlist').hidden = true; $('leadToggle').textContent = '🏛 View Our Leaders'; loadLeaders(); }
+  if (v === 'news' || v === 'acct') loadFeed().then(() => v === 'news' ? renderNews() : renderAcct()); 
+  window.scrollTo(0, 0); 
+} 
+
+document.addEventListener('click', e => { 
+  const b = e.target.closest('[data-go]'); 
+  if (b) go(b.dataset.go); 
+}); 
+
+$('eye').onclick = () => $('lpin').type = $('lpin').type === 'password' ? 'text' : 'password';
+$('forgot').onclick = () => toast('Ask the Chairman to reset your PIN.', false); 
+$('toreg').onclick = () => go('reg');
+$('quickpay').onclick = () => go('pay'); 
+
+function renderHome() { 
+  if (!sum) return;
+  $('hn').textContent = sum.name || '';
+  $('idBanner').hidden = !!sum.hasId;
+  $('bal').textContent = hidden ? '****' : (sum.paidTotal || 0).toLocaleString(); 
+  $('hide').textContent = hidden ? '🙈' : '👁'; 
+  $('hs').textContent = sum.status === 'Verified' ? '✔' : '⏳'; 
+  $('pn2').textContent = sum.name || '';
+  $('pph').textContent = sum.phone || ''; 
+  $('psc').textContent = sum.school || '';
+  $('prg').textContent = sum.regNo || '-'; 
+  $('pz').textContent = sum.zone || '-';
+  $('pst').textContent = sum.status === 'Verified' ? 'Verified member' : 'Pending verification by the Chairman'; 
+  if (sum.phone) $('pp').value = '0' + sum.phone.slice(3); 
+} 
+
+async function refresh() { 
+  sum = await post('/api/member/summary', cred); 
+  renderHome(); 
+} 
+
+$('hide').onclick = () => { hidden = !hidden; renderHome(); }; 
+
+$('lbtn').onclick = e => act(e.target, async () => { 
+  const phoneVal = $('lp').value.trim();
+  const pinVal = $('lpin').value.trim();
+  
+  if (!phoneVal || !pinVal) {
+    toast('Please enter both phone number and PIN.', false);
+    return;
   }
-  m.kin = out; save(); res.json({ message: 'Saved. You can keep editing until the Chairman locks the list.' });
-});
-const CERT_DIR = path.join(path.dirname(FILE), 'certs');
-const certOk = f => typeof f === 'string' && /^[a-f0-9-]{36}\.(jpg|png)$/.test(f) && (db.certNames || []).includes(f);
 
-// --- National ID photos (front and back): stored privately, only the Chairman can view them.
-const idOk = f => typeof f === 'string' && /^[a-f0-9-]{36}\.jpg$/.test(f) && (db.idNames || []).includes(f);
-const idErr = e => /^(Take|ID photo|The ID)/.test(e.message) ? e.message : 'Could not store the ID photos. Try again.';
-async function putId(dataUrl) {
-  const mt = /^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
-  if (!mt) throw new Error('Take clear photos of the front and back of your ID card.');
-  const buf = Buffer.from(mt[1], 'base64');
-  if (buf.length > 1500000) throw new Error('ID photo too large. Retake it a little further from the card.');
-  if (buf.length < 5000) throw new Error('The ID photo looks empty. Retake it.');
-  const f = crypto.randomUUID() + '.jpg';
-  if (USE_SB) await sb('mwe_files', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ name: f, mime: 'image/jpeg', data: mt[1] }) });
-  else { fs.mkdirSync(CERT_DIR, { recursive: true }); fs.writeFileSync(path.join(CERT_DIR, f), buf); }
-  db.idNames.push(f); return f;
-}
-async function dropId(f) {
-  if (!f) return;
-  db.idNames = db.idNames.filter(x => x !== f);
-  try { if (USE_SB) await sb('mwe_files?name=eq.' + f, { method: 'DELETE', headers: { Prefer: 'return=minimal' } }); else fs.unlinkSync(path.join(CERT_DIR, f)); }
-  catch (e) { console.error('ID DELETE:', e.message); }
-}
-async function replaceId(owner, body) {   // owner: a member or leader record
-  let a = '', b = '';
-  try { a = await putId(body.idFront); b = await putId(body.idBack); }
-  catch (e) { await dropId(a); throw e; }
-  await dropId(owner.idFront); await dropId(owner.idBack);
-  owner.idFront = a; owner.idBack = b; owner.idAt = new Date().toISOString(); save();
-}
-app.post('/api/member/id', async (req, res) => {
-  const m = memberAuth(req, res); if (!m) return;
-  try { await replaceId(m, req.body); res.json({ message: 'ID saved. Thank you.' }); } catch (e) { res.status(400).json({ error: idErr(e) }); }
-});
-app.post('/api/leader/id', admin('leader'), async (req, res) => {
-  const l = leaderOf(req); if (!l) return res.sendStatus(403);
-  try { await replaceId(l, req.body); res.json({ message: 'ID saved. Thank you.' }); } catch (e) { res.status(400).json({ error: idErr(e) }); }
-});
-app.get('/api/admin/id/:file', admin('chairman'), async (req, res) => {
-  if (!idOk(req.params.file)) return res.sendStatus(404);
-  try {
-    if (USE_SB) { const r = await sb('mwe_files?name=eq.' + req.params.file + '&select=mime,data'); if (!r || !r[0]) return res.sendStatus(404); res.type(r[0].mime).send(Buffer.from(r[0].data, 'base64')); }
-    else res.sendFile(path.join(CERT_DIR, req.params.file));
-  } catch (e) { console.error(e.message); res.sendStatus(500); }
-});
-app.post('/api/kin/cert', async (req, res) => {
-  const m = memberAuth(req, res); if (!m) return;
-  if (m.kinLocked) return res.status(403).json({ error: 'The Chairman has locked your list.' });
-  const mt = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body.image || ''));
-  if (!mt) return res.status(400).json({ error: 'Upload a photo (JPG or PNG).' });
-  const buf = Buffer.from(mt[2], 'base64'); if (buf.length > 1500000) return res.status(413).json({ error: 'Image too large. Try a smaller photo.' });
-  const f = crypto.randomUUID() + (mt[1] === 'png' ? '.png' : '.jpg');
-  try {
-    if (USE_SB) await sb('mwe_files', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ name: f, mime: 'image/' + (mt[1] === 'png' ? 'png' : 'jpeg'), data: mt[2] }) });
-    else { fs.mkdirSync(CERT_DIR, { recursive: true }); fs.writeFileSync(path.join(CERT_DIR, f), buf); }
-  } catch (e) { console.error('CERT STORE FAILED:', e.message); return res.status(500).json({ error: 'Could not store the image. Try again.' }); }
-  db.certNames.push(f); save(); res.json({ cert: f });
-});
-app.get('/api/admin/cert/:file', admin('chairman'), async (req, res) => {
-  if (!certOk(req.params.file)) return res.sendStatus(404);
-  try {
-    if (USE_SB) { const r = await sb('mwe_files?name=eq.' + req.params.file + '&select=mime,data'); if (!r || !r[0]) return res.sendStatus(404); res.type(r[0].mime).send(Buffer.from(r[0].data, 'base64')); }
-    else res.sendFile(path.join(CERT_DIR, req.params.file));
-  } catch (e) { console.error(e.message); res.sendStatus(500); }
-});
-const memberById = (req, res) => { const m = db.members.find(x => x.id === req.params.id); if (!m) res.sendStatus(404); return m; };
-app.get('/api/admin/members/:id/kin', admin('chairman'), (req, res) => { const m = memberById(req, res); if (m) res.json({ name: m.name, locked: !!m.kinLocked, kin: m.kin || [] }); });
-app.post('/api/admin/members/:id/lock', admin('chairman'), (req, res) => { const m = memberById(req, res); if (m) { m.kinLocked = !!req.body.locked; save(); res.json({ ok: true }); } });
-app.post('/api/admin/kin/lockall', admin('chairman'), (_, res) => { db.members.forEach(m => m.kinLocked = true); save(); res.json({ ok: true }); });
-app.post('/api/admin/members/:id/resetpin', admin('chairman'), (req, res) => {
-  const m = memberById(req, res); if (!m) return;
-  if (!/^\d{4,6}$/.test(String(req.body.pin || ''))) return res.status(400).json({ error: 'PIN must be 4 to 6 digits.' });
-  m.pinHash = hashPin(req.body.pin); save(); res.json({ ok: true });
-});
+  const c = { phone: phoneVal, pin: pinVal }; 
+  cred = c; 
+  let leader = null, memErr = null; 
+  try { leader = await post('/api/leader/login', c); } catch {} 
+  try { await refresh(); } catch (x) { memErr = x; cred = null; } 
+  if (!leader && memErr) throw memErr; 
+  if (cred) { try { sessionStorage.setItem('mwe_cred', JSON.stringify(c)); } catch {} }
+  $('lpin').value = ''; 
+  staffUser = leader;
+  $('snOff').hidden = !(leader && leader.admin);
+  $('profLead').hidden = !leader;
+  $('profOff').hidden = !(leader && leader.admin);
+  if (leader) { 
+    try { 
+      sessionStorage.setItem('leader', JSON.stringify(leader)); 
+      if (leader.admin) { 
+        sessionStorage.setItem('tok', leader.admin.token); 
+        sessionStorage.setItem('role', leader.admin.role); 
+      } 
+    } catch {} 
+    $('sn').textContent = leader.name; 
+    $('st').textContent = leader.title; 
+    $('sadmin').hidden = !leader.admin; 
+    $('smem').hidden = !cred; 
+    go('staff'); 
+    loadGlance(leader); 
+    if (cred) checkNew(); 
+    return; 
+  } 
+  go('home'); 
+  checkNew(); 
+}); 
 
-app.post('/api/member/summary', (req, res) => {
-  const m = memberAuth(req, res); if (!m) return;
-  const ph = phonesOf(m), mine = db.payments.filter(p => ph.includes(p.phone)).slice().reverse();
-  res.json({ name: m.name, school: m.school, zone: m.zone || '', phone: m.phone, regNo: m.regNo || '', status: m.status, kinLocked: !!m.kinLocked, hasId: !!(m.idFront && m.idBack),
-    paidTotal: mine.filter(p => p.status === 'Paid').reduce((t, p) => t + p.amount, 0), pending: mine.filter(p => p.status !== 'Paid' && p.status !== 'Failed').length,
-    payments: mine.slice(0, 30).map(p => ({ amount: p.amount, status: p.status, caseTitle: p.caseTitle || 'General', code: p.code, created: p.created })) });
-});
+$('out').onclick = () => logout();
+$('sout').onclick = () => logout();
 
-// --- Leaders: own login (phone + PIN set by the Chairman), posting of minutes, notices and accounts.
-const canPost = l => ({ minutes: /secretary/i.test(l.role) && !/organi[sz]ing/i.test(l.role), accounts: /treasurer/i.test(l.role), notice: true });
-const zoneOf = l => /thiba/i.test(l.role) ? 'Thiba' : /murinduko/i.test(l.role) ? 'Murinduko' : 'All';
-const leaderFails = new Map();
-const leaderOf = req => db.leaders.find(l => l.id === req.sess.lid && !l.dismissed);
-app.post('/api/leader/login', (req, res) => {
-  const phone = normPhone(req.body.phone), f = leaderFails.get(phone);
-  if (f && f.until > Date.now()) return res.status(429).json({ error: 'Too many attempts. Try again in 10 minutes.' });
-  const l = db.leaders.find(x => !x.dismissed && normPhone(x.phone) === phone);
-  if (!l) return res.status(403).json({ error: 'Wrong phone number or PIN. If you have no PIN yet, ask the Chairman.' });   // ordinary members: not counted as a failed attempt
-  if (!l.pinHash || !checkPin(req.body.pin, l.pinHash)) { const n = ((f && f.n) || 0) + 1; leaderFails.set(phone, { n: n >= 5 ? 0 : n, until: n >= 5 ? Date.now() + 600000 : 0 }); return res.status(403).json({ error: 'Wrong phone number or PIN. If you have no PIN yet, ask the Chairman.' }); }
-  leaderFails.delete(phone);
-  const t = crypto.randomBytes(24).toString('hex'); sessions.set(t, { role: 'leader', lid: l.id, exp: Date.now() + 2 * 3600e3 });
-  const ar = { Chairman: 'chairman', Treasurer: 'treasurer' }[l.role]; let adminSess;   // the Chairman and Treasurer also get their officials session, so one login opens everything
-  if (ar) { const at = crypto.randomBytes(24).toString('hex'); sessions.set(at, { role: ar, lid: l.id, exp: Date.now() + 2 * 3600e3 }); adminSess = { token: at, role: ar }; }
-  res.json({ token: t, name: l.name, title: l.role, can: { ...canPost(l), remind: !!remindScope(l) }, hasId: !!(l.idFront && l.idBack), admin: adminSess });
-});
-async function saveImage(dataUrl) {
-  const mt = /^data:image\/(jpeg|png);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || '')); if (!mt) return '';
-  const buf = Buffer.from(mt[2], 'base64'); if (buf.length > 1500000) throw new Error('Image too large. Try a smaller photo.');
-  const f = crypto.randomUUID() + (mt[1] === 'png' ? '.png' : '.jpg');
-  if (USE_SB) await sb('mwe_files', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ name: f, mime: 'image/' + (mt[1] === 'png' ? 'png' : 'jpeg'), data: mt[2] }) });
-  else { fs.mkdirSync(CERT_DIR, { recursive: true }); fs.writeFileSync(path.join(CERT_DIR, f), buf); }
-  db.postImgs.push(f); return f;
+function logout() {
+  try { sessionStorage.clear(); } catch {} 
+  cred = sum = feed = null; staffUser = null; 
+  $('profLead').hidden = true; 
+  $('profOff').hidden = true; 
+  $('lp').value = ''; 
+  go('login'); 
 }
-async function sendImage(res, f) {
-  if (USE_SB) { const r = await sb('mwe_files?name=eq.' + f + '&select=mime,data'); if (!r || !r[0]) return res.sendStatus(404); return res.type(r[0].mime).send(Buffer.from(r[0].data, 'base64')); }
-  res.sendFile(path.join(CERT_DIR, f));
-}
-const today = () => new Date().toISOString().slice(0, 10), okDate = d => /^\d{4}-\d{2}-\d{2}$/.test(d || '') ? d : today();
-app.post('/api/leader/post', admin('leader'), async (req, res) => {
-  try {
-    const l = leaderOf(req), type = req.body.type;
-    if (!['minutes', 'notice'].includes(type) || !canPost(l)[type]) return res.status(403).json({ error: 'Your role cannot post this.' });
-    const title = clean(req.body.title), body = String(req.body.body || '').trim().slice(0, 6000);
-    if (title.length < 3) return res.status(400).json({ error: 'Enter a title.' });
-    if (body.length < 3 && !req.body.image) return res.status(400).json({ error: 'Write the details or attach a photo.' });
-    const image = await saveImage(req.body.image);
-    db.posts.push({ id: crypto.randomUUID(), type, title, body, date: okDate(req.body.date), image, author: l.name, role: l.role, zone: type === 'notice' ? zoneOf(l) : 'All', created: new Date().toISOString() });
-    save(); res.json({ ok: true });
-  } catch (e) { console.error('POST FAILED:', e.message); res.status(400).json({ error: e.message.startsWith('Image') ? e.message : 'Could not post. Try again.' }); }
-});
-// Leaders see their own posts; the Chairman sees every leader's posts.
-app.get('/api/leader/posts', admin('leader'), (req, res) => {
-  const l = leaderOf(req), chair = /^chairman$/i.test(l.role);
-  res.json(db.posts.filter(p => chair || p.author === l.name).slice(-50).reverse().map(({ image, ...p }) => ({ ...p, hasImage: !!image })));
-});
-async function dropImage(f) {
-  db.postImgs = db.postImgs.filter(x => x !== f);
-  try {
-    if (USE_SB) await sb('mwe_files?name=eq.' + f, { method: 'DELETE', headers: { Prefer: 'return=minimal' } });
-    else fs.unlinkSync(path.join(CERT_DIR, f));
-  } catch (e) { console.error('IMAGE DELETE:', e.message); }
-}
-function postAccess(req, res) {
-  const l = leaderOf(req), p = db.posts.find(x => x.id === req.params.id);
-  if (!p) { res.status(404).json({ error: 'Post not found.' }); return null; }
-  if (p.author !== l.name && !/^chairman$/i.test(l.role)) { res.status(403).json({ error: 'You can only change your own posts.' }); return null; }
-  return p;
-}
-app.post('/api/leader/post/:id/edit', admin('leader'), async (req, res) => {
-  try {
-    const p = postAccess(req, res); if (!p) return;
-    const title = clean(req.body.title), body = String(req.body.body || '').trim().slice(0, 6000), old = p.image;
-    if (title.length < 3) return res.status(400).json({ error: 'Enter a title.' });
-    let image = old;
-    if (req.body.image) image = await saveImage(req.body.image);
-    else if (req.body.removeImage) image = '';
-    if (body.length < 3 && !image) return res.status(400).json({ error: 'Write the details or keep a photo.' });
-    Object.assign(p, { title, body, image, edited: new Date().toISOString() });
-    if (old && old !== image) await dropImage(old);
-    save(); res.json({ ok: true });
-  } catch (e) { console.error('EDIT FAILED:', e.message); res.status(400).json({ error: e.message.startsWith('Image') ? e.message : 'Could not save. Try again.' }); }
-});
-app.post('/api/leader/post/:id/delete', admin('leader'), async (req, res) => {
-  const p = postAccess(req, res); if (!p) return;
-  const img = p.image;
-  db.posts = db.posts.filter(x => x.id !== p.id);
-  if (img) await dropImage(img);
-  save(); res.json({ ok: true });
-});
-const LEDGER_CATS = { in: ['Levy collected', 'Joining / registration fee', 'Donation', 'Other income'], out: ['Case payout', 'Meeting / admin expense', 'Bank / M-Pesa charges', 'Other expense'] };
-const caseSummary = () => db.cases.map(c => {
-  const paid = db.payments.filter(p => p.caseId === c.id && p.status === 'Paid');
-  const net = db.ledger.filter(e => e.caseId === c.id && e.category === 'Case payout').reduce((t, e) => t + (e.kind === 'out' ? e.amount : -e.amount), 0);
-  return { id: c.id, title: c.title, kind: c.kind, levy: c.levy, due: c.due, status: c.status, payoutDue: c.payout, contributions: paid.reduce((t, p) => t + p.amount, 0), contributors: paid.length, payoutPaid: net };
-}).reverse();
-const ledgerView = () => { const e = db.ledger.slice().sort((a, b) => (b.date + b.created).localeCompare(a.date + a.created)); const t = k => e.filter(x => x.kind === k).reduce((s, x) => s + x.amount, 0); return { totalIn: t('in'), totalOut: t('out'), balance: t('in') - t('out'), entries: e.slice(0, 2000), cases: caseSummary() }; };
-app.get('/api/leader/ledger', admin('leader'), (req, res) => canPost(leaderOf(req)).accounts ? res.json(ledgerView()) : res.status(403).json({ error: 'Treasurer only.' }));
-app.post('/api/leader/ledger', admin('leader'), (req, res) => {
-  const l = leaderOf(req); if (!canPost(l).accounts) return res.status(403).json({ error: 'Only the Treasurer posts accounts.' });
-  const kind = ['in', 'out'].includes(req.body.kind) ? req.body.kind : null, amount = Math.round(Number(req.body.amount)), desc = clean(req.body.desc);
-  if (!kind) return res.status(400).json({ error: 'Choose money in or money out.' });
-  if (!(amount >= 1 && amount <= 10000000)) return res.status(400).json({ error: 'Enter a valid amount.' });
-  if (desc.length < 3) return res.status(400).json({ error: 'Describe the entry.' });
-  const category = LEDGER_CATS[kind].includes(req.body.category) ? req.body.category : null;
-  if (!category) return res.status(400).json({ error: 'Choose a category.' });
-  const cs = req.body.caseId ? db.cases.find(c => c.id === req.body.caseId) : null;
-  if (req.body.caseId && !cs) return res.status(400).json({ error: 'That welfare case was not found.' });
-  db.ledger.push({ id: crypto.randomUUID(), date: okDate(req.body.date), kind, amount, desc, category, caseId: cs ? cs.id : '', caseTitle: cs ? cs.title : '', author: l.name, created: new Date().toISOString(), signed: false }); save(); res.json({ ok: true });
-});
-// Entries are never deleted: a mistake is reversed by a new opposite entry.
-app.post('/api/leader/ledger/:id/reverse', admin('leader'), (req, res) => {
-  const l = leaderOf(req); if (!canPost(l).accounts) return res.status(403).json({ error: 'Only the Treasurer can do this.' });
-  const e = db.ledger.find(x => x.id === req.params.id); if (!e || e.reversed || e.corrects) return res.status(400).json({ error: 'This entry cannot be reversed.' });
-  e.reversed = true;
-  db.ledger.push({ id: crypto.randomUUID(), date: today(), kind: e.kind === 'in' ? 'out' : 'in', amount: e.amount, desc: 'Reversal of: ' + e.desc, category: e.category || '', caseId: e.caseId || '', caseTitle: e.caseTitle || '', corrects: e.id, author: l.name, created: new Date().toISOString(), signed: false }); save(); res.json({ ok: true });
-});
-const phonesOf = m => [m.phone, ...(m.prevPhones || [])];
-const dropSessions = id => { for (const [t, x] of sessions) if (x.lid === id) sessions.delete(t); };
-const unique = r => /^(chairman|treasurer)$/i.test(r);
-function leaderFields(b, self) {
-  const name = clean(b.name), role = clean(b.role).slice(0, 40), phone = normPhone(b.phone);
-  if (name.length < 3) return { error: "Enter the official's full name." };
-  if (role.length < 3) return { error: "Enter the official's position." };
-  if (!phone) return { error: 'Enter a valid phone number.' };
-  const others = db.leaders.filter(l => !l.dismissed && l !== self);
-  if (others.some(l => normPhone(l.phone) === phone)) return { error: 'Another official already uses this phone number.' };
-  if (unique(role) && others.some(l => l.role.toLowerCase() === role.toLowerCase())) return { error: 'There is already a ' + role + '. Edit that person instead.' };
-  return { name, role, phone: '0' + phone.slice(3) };
-}
-const leaderById = (req, res) => { const l = db.leaders.find(x => x.id === req.params.id); if (!l) res.sendStatus(404); return l; };
-app.get('/api/admin/leaders', admin('chairman'), (_, res) => res.json(db.leaders.map(l => ({ id: l.id, name: l.name, role: l.role, phone: l.phone, hasPin: !!l.pinHash, idFront: l.idFront || '', idBack: l.idBack || '', dismissed: !!l.dismissed, dismissReason: l.dismissReason || '' }))));
-app.post('/api/admin/leaders', admin('chairman'), (req, res) => {
-  const f = leaderFields(req.body, null); if (f.error) return res.status(400).json({ error: f.error });
-  db.leaders.push({ id: crypto.randomUUID(), ...f }); save(); res.json({ ok: true });
-});
-app.post('/api/admin/leaders/:id/edit', admin('chairman'), (req, res) => {
-  const l = leaderById(req, res); if (!l) return;
-  const f = leaderFields(req.body, l); if (f.error) return res.status(400).json({ error: f.error });
-  if (/^chairman$/i.test(l.role) && !/^chairman$/i.test(f.role)) return res.status(400).json({ error: 'The Chairman position cannot be removed. To hand over, change this record to the new Chairman.' });
-  const person = f.name !== l.name || f.phone !== l.phone;
-  Object.assign(l, f);
-  if (person) { delete l.pinHash; dropSessions(l.id); }   // a new person must get a new PIN
-  save(); res.json({ ok: true });
-});
-app.post('/api/admin/leaders/:id/setpin', admin('chairman'), (req, res) => {
-  const l = leaderById(req, res); if (!l) return;
-  if (l.dismissed) return res.status(400).json({ error: 'This official has been dismissed.' });
-  if (!/^\d{4,6}$/.test(String(req.body.pin || ''))) return res.status(400).json({ error: 'PIN must be 4 to 6 digits.' });
-  l.pinHash = hashPin(req.body.pin); save(); res.json({ ok: true });
-});
-app.post('/api/admin/leaders/:id/dismiss', admin('chairman'), (req, res) => {
-  const l = leaderById(req, res); if (!l) return;
-  if (/^chairman$/i.test(l.role)) return res.status(400).json({ error: 'The Chairman cannot be dismissed here. To hand over, edit this record to the new Chairman.' });
-  l.dismissed = true; l.dismissedAt = new Date().toISOString(); l.dismissReason = clean(req.body.reason); delete l.pinHash; dropSessions(l.id); save(); res.json({ ok: true });
-});
-app.post('/api/admin/leaders/:id/reinstate', admin('chairman'), (req, res) => {
-  const l = leaderById(req, res); if (!l) return;
-  const f = leaderFields(l, l); if (f.error) return res.status(400).json({ error: f.error });
-  l.dismissed = false; delete l.dismissedAt; delete l.dismissReason; save(); res.json({ ok: true });
-});
-app.get('/api/admin/ledger', admin('chairman'), (_, res) => res.json(ledgerView()));
-app.post('/api/admin/ledger/:id/signoff', admin('chairman'), (req, res) => { const e = db.ledger.find(x => x.id === req.params.id); if (!e) return res.sendStatus(404); e.signed = true; e.signedAt = new Date().toISOString(); save(); res.json({ ok: true }); });
 
-// --- Tap-to-send reminders: who has not yet paid each open case. Officers see all members; zone reps see their own zone.
-const remindScope = l => /treasurer|chairman|chairperson|secretary/i.test(l.role) ? 'All' : (zoneOf(l) !== 'All' ? zoneOf(l) : null);
-app.get('/api/leader/reminders', admin('leader'), (req, res) => {
-  const scope = remindScope(leaderOf(req));
-  if (!scope) return res.status(403).json({ error: 'Your role does not send reminders.' });
-  const ms = db.members.filter(m => m.status === 'Verified' && (scope === 'All' || m.zone === scope));
-  const cases = db.cases.filter(c => c.status === 'Open').map(c => {
-    const done = new Set(db.payments.filter(p => p.caseId === c.id && p.status !== 'Failed').map(p => p.phone));
-    return { id: c.id, title: c.title, due: c.due, levy: c.levy, owed: owed(c), late: owed(c) > c.levy, total: ms.length, unpaid: ms.filter(m => !phonesOf(m).some(p => done.has(p))).map(m => ({ name: m.name, zone: m.zone || '', phone: m.phone })) };
+function idPhoto(inp) {
+  return new Promise(res => {
+    const f = pickFile(inp); if (!f) return res('');
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, 1600 / Math.max(img.width, img.height)), c = document.createElement('canvas');
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      res(c.toDataURL('image/jpeg', 0.75));
+    };
+    img.onerror = () => res('');
+    img.src = URL.createObjectURL(f);
   });
-  res.json({ scope, payNo: PAY.number, payName: PAY.name, cases });
+}
+
+$('regBtn').onclick = e => act(e.target, async () => { 
+  const idFront = await idPhoto($('rif')), idBack = await idPhoto($('rib'));
+  if (!idFront || !idBack) { toast('Take clear photos of the front and back of your ID card.', false); return; }
+  const d = await post('/api/members', { idFront, idBack, 
+    name: $('rn').value, 
+    school: $('rs').value, 
+    zone: $('rzone').value, 
+    regNo: $('rreg').value, 
+    idNo: $('rid').value, 
+    phone: $('rp').value, 
+    pin: $('rpin').value 
+  }); 
+  toast(d.message || 'Registration successful!'); loadStats(); 
+  $('lp').value = $('rp').value; 
+  ['rn', 'rreg', 'rid', 'rs', 'rp', 'rpin', 'rzone'].forEach(i => $(i).value = ''); resetPk(); 
+  go('login'); 
+}); 
+
+async function loadCases() { 
+  try { cases = await api('/api/cases'); } catch { $('caselist').textContent = 'Could not load. Try again.'; return; } 
+  $('openN').textContent = cases.length; 
+  $('caselist').innerHTML = cases.length ? cases.map(c => `<div class="row"><div><b>${esc(c.title)}</b><br><small>Due ${esc(c.due)} · KES ${c.owed}${c.late ? ' (late, +50%)' : ''}</small></div><button class="btn" style="width:auto;margin:0;padding:10px 16px" onclick="payCase('${c.id}')">Pay</button></div>`).join('') : '<div class="notice">No open welfare cases right now.</div>'; 
+  $('pcase').innerHTML = '<option value="">General contribution</option>' + cases.map(c => `<option value="${c.id}">${esc(c.title)} — KES ${c.owed}</option>`).join(''); 
+} 
+
+window.payCase = id => { 
+  $('pcase').value = id; 
+  const c = cases.find(x => x.id === id); 
+  if (c) $('pa').value = c.owed; 
+  go('pay'); 
+}; 
+
+$('pcase').onchange = () => { 
+  const c = cases.find(x => x.id === $('pcase').value); 
+  if (c) $('pa').value = c.owed; 
+}; 
+
+$('payBtn').onclick = e => act(e.target, async () => { 
+  const d = await post('/api/pay', { 
+    phone: $('pp').value, 
+    amount: $('pa').value, 
+    code: $('pc').value, 
+    caseId: $('pcase').value 
+  }); 
+  toast(d.message || 'Payment submitted.'); 
+  $('pc').value = ''; 
+  if (cred) { await refresh(); go('stmt'); } 
+}); 
+
+let feed = null; 
+const getSeen = k => { try { return localStorage.getItem('mwe_seen_' + k) || ''; } catch { return ''; } }, 
+      setSeen = (k, v) => { try { localStorage.setItem('mwe_seen_' + k, v); } catch {} }; 
+
+const latestOf = k => !feed ? '' : (k === 'news' ? feed.posts : feed.ledger.entries).reduce((m, x) => x.created > m ? x.created : m, ''); 
+
+function badges() { 
+  $('bn').hidden = !(latestOf('news') > getSeen('news'));
+  $('ba').hidden = !(latestOf('acct') > getSeen('acct')); 
+} 
+
+async function loadFeed() { 
+  try { feed = await post('/api/feed', cred); } catch { return; } 
+  badges(); 
+} 
+
+const kes = n => 'KES ' + Number(n).toLocaleString(); 
+
+// --- Staff home: quick numbers for leaders.
+async function loadGlance(l) {
+  const box = $('glance'); box.innerHTML = '<div class="notice" style="grid-column:1/-1">Loading…</div>';
+  const ad = p => fetch(p, { headers: { 'x-admin-token': l.admin.token } }).then(r => r.ok ? r.json() : Promise.reject());
+  const stat = (n, label, go, hot) => `<button class="stat${hot && n ? ' hot' : ''}" onclick="${go}"><b>${n}</b><span>${label}</span></button>`;
+  const out = [stat('<span class="mcount">–</span>', 'Members', "location.href='/officials.html'")];
+  try { const cs = await api('/api/cases'); out.push(stat(cs.length, 'Open cases', "location.href='/leaders.html'")); } catch {}
+  if (l.admin) {
+    const chair = l.admin.role === 'chairman';
+    try { const p = await ad('/api/admin/payments'); out.push(stat(p.filter(x => x.status === (chair ? 'Awaiting Chairman' : 'Pending')).length, 'Payments to confirm', "location.href='/officials.html'", true)); } catch {}
+    if (chair) { try { const m = await ad('/api/admin/members'); out.push(stat(m.filter(x => x.status === 'Pending').length, 'Members to verify', "location.href='/officials.html'", true)); } catch {} }
+  }
+  box.innerHTML = out.join('') || '<div class="notice" style="grid-column:1/-1">Nothing to show right now.</div>';
+  loadStats();
+}
+
+// --- Live member tally: refreshes every 30 seconds and counts up when someone joins.
+let lastCount = null;
+function bump(n) {
+  const els = [...document.querySelectorAll('.mcount')];
+  if (lastCount === null || n <= lastCount) { els.forEach(e => e.textContent = n); lastCount = n; return; }
+  const from = lastCount, t0 = performance.now(); lastCount = n;
+  (function step(t) {
+    const k = Math.min(1, (t - t0) / 800);
+    els.forEach(e => { e.textContent = Math.round(from + (n - from) * k); e.classList.add('pulse'); });
+    if (k < 1) requestAnimationFrame(step); else setTimeout(() => els.forEach(e => e.classList.remove('pulse')), 700);
+  })(t0);
+  toast('🎉 A new member joined! We are now ' + n + ' members.');
+}
+async function loadStats() { try { const d = await api('/api/stats'); bump(d.members); } catch {} }
+setInterval(() => { if (!document.hidden) loadStats(); }, 30000);
+loadStats();
+
+// --- "What's new" pop-up: new welfare cases and new notices/minutes since this phone last saw them.
+const getJ = k => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch { return null; } },
+      setJ = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+let popTarget = 'cases';
+async function checkNew() {
+  try {
+    await loadFeed();
+    const cs = await api('/api/cases');
+    cases = cs;
+    const seenC = getJ('mwe_pop_cases'), seenP = getJ('mwe_pop_posts');
+    const newC = seenC ? cs.filter(c => !seenC.includes(c.id)) : cs;
+    const posts = feed ? feed.posts : [];
+    const newP = seenP ? posts.filter(p => p.created > seenP) : [];
+    setJ('mwe_pop_cases', cs.map(c => c.id));
+    setJ('mwe_pop_posts', posts.reduce((m, p) => p.created > m ? p.created : m, seenP || ''));
+    if (!newC.length && !newP.length) return;
+    const items = newC.map(c => `<div class="it">🆘 <b>${esc(c.title)}</b><br><small>Levy KES ${c.owed} · due ${esc(c.due)}${c.late ? ' (late, +50%)' : ''}</small></div>`)
+      .concat(newP.map(p => `<div class="it">${p.type === 'minutes' ? '📋' : '📢'} <b>${esc(p.title)}</b><br><small>${esc(p.author)}, ${esc(p.role)}</small></div>`));
+    $('popT').textContent = newC.length ? (newC.length === 1 ? 'New welfare case' : 'New welfare cases') : 'New from your officials';
+    $('popL').innerHTML = items.join('');
+    popTarget = newC.length ? 'cases' : 'news';
+    $('popGo').textContent = newC.length ? 'View & pay' : 'Read now';
+    $('pop').classList.add('on');
+  } catch {}
+}
+$('popX').onclick = () => $('pop').classList.remove('on');
+$('popGo').onclick = () => { $('pop').classList.remove('on'); go(popTarget); };
+
+function postCard(p) { 
+  return `<div class="row" style="display:block"><b>${esc(p.title)}</b>${p.zone !== 'All' ? ` <span class="badge">${esc(p.zone)}</span>` : ''}<br><small>${esc(p.date)} · ${esc(p.author)}, ${esc(p.role)}${p.edited ? ' · edited' : ''}</small><div style="white-space:pre-wrap;margin-top:6px">${esc(p.body)}</div>${p.hasImage ? `<a href="#" onclick="viewImg('${p.id}');return false">📷 View photo</a>` : ''}</div>`; 
+} 
+
+function renderNews() { 
+  if (!feed) { $('newslist').textContent = 'Could not load. Try again.'; return; } 
+  const sec = (t, a) => `<h3 style="margin:14px 0 8px">${t}</h3>` + (a.length ? a.map(postCard).join('') : '<div class="notice">Nothing posted yet.</div>'); 
+  $('newslist').innerHTML = sec('Meeting minutes', feed.posts.filter(p => p.type === 'minutes')) + sec('Notices', feed.posts.filter(p => p.type === 'notice')); 
+  setSeen('news', latestOf('news')); 
+  badges(); 
+} 
+
+function renderAcct() { 
+  if (!feed) { $('acctlist').textContent = 'Could not load. Try again.'; return; } 
+  const L = feed.ledger, box = (t, v) => `<div class="row" style="flex:1;display:block;text-align:center">${t}<br><b>${kes(v)}</b></div>`; 
+  $('acctsum').innerHTML = `<div class="card" style="margin:0 0 14px"><div>Welfare Accounts</div><div style="opacity:.8;font-size:.9rem;margin-top:10px">Current balance</div><div class="big">${kes(L.balance)}</div><div class="acts"><div class="ac"><span>⬇️</span>Money in<br><b>${kes(L.totalIn)}</b></div><div class="ac"><span>⬆️</span>Money out<br><b>${kes(L.totalOut)}</b></div><div class="ac"><span>🧾</span>Entries<br><b>${L.entries.length}</b></div></div></div><p style="color:#666;font-size:.85rem">Posted by the Treasurer and signed off by the Chairman.</p>`; 
+  $('acctlist').innerHTML = L.entries.map(x => `<div class="row" style="${x.reversed ? 'opacity:.5;text-decoration:line-through' : ''}"><div><b style="color:${x.kind === 'in' ? '#2e7d32' : '#c62828'}">${x.kind === 'in' ? '+' : '−'} ${kes(x.amount)}</b> ${esc(x.desc)}<br><small>${esc(x.date)}${x.signed ? ' · ✔ signed by Chairman' : ' · awaiting sign-off'}</small></div></div>`).join('') || '<div class="notice">No entries yet.</div>'; 
+  setSeen('acct', latestOf('acct')); 
+  badges(); 
+} 
+
+window.viewImg = async id => { 
+  const w = window.open('about:blank'); 
+  try { 
+    const r = await fetch('/api/feed/image/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cred) }); 
+    if (!r.ok) throw 0; 
+    w.location = URL.createObjectURL(await r.blob()); 
+  } catch { 
+    if (w) w.close(); 
+    toast('Could not open the photo.', false); 
+  } 
+}; 
+
+async function loadLeaders() { 
+  try { 
+    const L = await post('/api/leaders', cred); 
+    $('leadlist').innerHTML = L.map(l => { 
+      const wa = '254' + l.phone.slice(1); 
+      return `<div class="row"><div><b>${esc(l.name)}</b><br><small>${esc(l.role)}</small><br><small>${esc(l.phone)}</small></div><div><a href="tel:${esc(l.phone)}" style="text-decoration:none;font-size:1.6rem">📞</a> <a href="https://wa.me/${wa}" style="text-decoration:none;font-size:1.6rem">💬</a></div></div>`; 
+    }).join(''); 
+  } catch (e) { 
+    $('leadlist').textContent = e.message; 
+  } 
+} 
+
+function renderStmt() { 
+  $('stlist').innerHTML = sum && sum.payments.length ? sum.payments.map(p => `<div class="row"><div><b>KES ${p.amount}</b> · ${esc(p.caseTitle)}<br><small>${new Date(p.created).toLocaleString()} · ${esc(p.code)}</small></div><span class="badge ${p.status === 'Awaiting Chairman' ? 'Awaiting' : p.status}">${p.status}</span></div>`).join('') : '<div class="notice">No contributions yet.</div>'; 
+} 
+
+async function loadDir() { 
+  try { 
+    members = await api('/api/members'); 
+    drawDir(); 
+  } catch { 
+    $('dlist').textContent = 'Server waking up, try again in a few seconds…'; 
+  } 
+} 
+
+function drawDir() { 
+  const q = $('q').value.toLowerCase(); 
+  const r = members.filter(m => (m.name + m.school).toLowerCase().includes(q)); 
+  $('dlist').innerHTML = r.map(m => `<div class="row"><div><b>${esc(m.name)}</b><br><small>${esc(m.school)}${m.zone ? ' · ' + esc(m.zone) : ''}</small></div><span class="badge ${m.status}">${m.status}</span></div>`).join('') || 'No members found.'; 
+} 
+
+$('idSave').onclick = e => act(e.target, async () => {
+  const idFront = await idPhoto($('uif')), idBack = await idPhoto($('uib'));
+  if (!idFront || !idBack) { toast('Take both the front and the back of your ID.', false); return; }
+  const d = await post('/api/member/id', { ...cred, idFront, idBack });
+  toast(d.message || 'ID saved.');
+  resetPk();
+  await refresh(); go('home');
 });
 
-// --- A member's full statement (all their payments; the app filters by date and builds the PDF).
-app.post('/api/member/statement', (req, res) => {
-  const m = memberAuth(req, res); if (!m) return;
-  const ph = phonesOf(m), mine = db.payments.filter(p => ph.includes(p.phone)).slice().reverse().slice(0, 500);
-  res.json({ member: { name: m.name, regNo: m.regNo || '', zone: m.zone || '', school: m.school, phone: '0' + m.phone.slice(3) }, payments: mine.map(p => ({ amount: p.amount, status: p.status, caseTitle: p.caseTitle || 'General', code: p.code, created: p.created })) });
+$('leadToggle').onclick = () => {
+  const box = $('leadlist');
+  box.hidden = !box.hidden;
+  $('leadToggle').textContent = box.hidden ? '🏛 View Our Leaders' : '✖ Hide Our Leaders';
+};
+
+$('dirToggle').onclick = () => {
+  const box = $('dirBox');
+  box.hidden = !box.hidden;
+  $('dirToggle').textContent = box.hidden ? '👥 View Member Directory' : '✖ Hide Member Directory';
+};
+
+if ($('q')) $('q').oninput = drawDir; 
+
+api('/api/config').then(c => { 
+  if (c.number) {
+    $('payNo').textContent = c.number; 
+    document.querySelectorAll('.pn').forEach(x => x.textContent = c.number); 
+  }
+  if (c.name) {
+    $('payName').textContent = c.name; 
+    document.querySelectorAll('.pm').forEach(x => x.textContent = c.name); 
+  }
+}).catch(() => {}); 
+
+// --- Phone back button: go to the previous screen instead of leaving the app.
+// At the first screen, back asks "press back again to exit".
+const ROOTS = ['login', 'home', 'staff'], NEEDS_LOGIN = ['home', 'idup', 'cases', 'stmt', 'lead', 'news', 'acct', 'prof', 'staff'];
+let curView = 'login', exitArmed = false;
+function navTrack(v, fromPop) {
+  if (fromPop) { curView = v; return; }
+  if (v === curView) return;
+  if (ROOTS.includes(v) && ROOTS.includes(curView)) history.replaceState({ v }, '');
+  else history.pushState({ v }, '');
+  curView = v;
+}
+history.replaceState({ v: 'root' }, '');
+history.pushState({ v: 'login' }, '');
+window.addEventListener('popstate', e => {
+  const v = e.state && e.state.v;
+  if (!v || v === 'root') {
+    if (exitArmed) { history.back(); return; }
+    exitArmed = true;
+    toast('Press back again to exit', true);
+    history.pushState({ v: curView }, '');
+    setTimeout(() => exitArmed = false, 2500);
+    return;
+  }
+  if (NEEDS_LOGIN.includes(v) && !cred && !staffUser) { history.replaceState({ v: 'login' }, ''); go('login', true); return; }
+  go(v, true);
 });
 
-// --- What members see: notices, minutes (own zone + all) and the accounts (everyone).
-app.post('/api/feed', (req, res) => {
-  const m = memberAuth(req, res); if (!m) return;
-  const posts = db.posts.filter(p => p.zone === 'All' || p.zone === m.zone).slice(-80).reverse().map(({ image, ...p }) => ({ ...p, hasImage: !!image }));
-  res.json({ posts, ledger: ledgerView() });
-});
-app.post('/api/feed/image/:id', async (req, res) => {
-  const m = memberAuth(req, res); if (!m) return;
-  const p = db.posts.find(x => x.id === req.params.id && (x.zone === 'All' || x.zone === m.zone));
-  if (!p || !p.image || !db.postImgs.includes(p.image)) return res.sendStatus(404);
-  try { await sendImage(res, p.image); } catch (e) { console.error(e.message); res.sendStatus(500); }
-});
 
-// --- Leadership list: visible to logged-in members only (phone + PIN).
-app.post('/api/leaders', (req, res) => { const m = memberAuth(req, res); if (m) res.json(db.leaders.filter(l => !l.dismissed).map(({ name, role, phone }) => ({ name, role, phone }))); });
-
-// --- Welfare cases: levy per case; late remittance (after the due date) attracts 50% interest on the principal.
-const PAYOUTS = { bereavement_member: ['Bereavement: principal member', 1000], bereavement_family: ['Bereavement: nuclear family member', 500], bereavement_parent: ['Bereavement: parent of principal member', 300], wedding: ['Wedding / dowry / parental blessing', 1000], other: ['Other case', 0] };
-const owed = c => Date.now() > new Date(c.due + 'T23:59:59+03:00').getTime() ? Math.ceil(c.levy * 1.5) : c.levy;
-app.get('/api/cases', (_, res) => res.json(db.cases.filter(c => c.status === 'Open').map(c => ({ id: c.id, title: c.title, due: c.due, levy: c.levy, owed: owed(c), late: owed(c) > c.levy }))));
-app.get('/api/admin/cases', admin('chairman', 'treasurer'), (_, res) => res.json(db.cases.slice().reverse().map(c => ({ ...c, owed: owed(c), collected: db.payments.filter(p => p.caseId === c.id && p.status === 'Paid').reduce((t, p) => t + p.amount, 0), pending: db.payments.filter(p => p.caseId === c.id && p.status !== 'Paid' && p.status !== 'Failed').length }))));
-app.post('/api/admin/cases', admin('chairman'), (req, res) => {
-  const t = PAYOUTS[req.body.type], title = clean(req.body.title), levy = Math.round(Number(req.body.levy)), due = String(req.body.due || '');
-  if (!t || title.length < 3) return res.status(400).json({ error: 'Choose a case type and enter who/what it is for.' });
-  if (!(levy >= 1 && levy <= 100000)) return res.status(400).json({ error: 'Enter the levy per member in KES.' });
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(due)) return res.status(400).json({ error: 'Choose the due date.' });
-  const payout = req.body.type === 'other' ? Math.round(Number(req.body.payout) || 0) : t[1];
-  const c = { id: crypto.randomUUID(), type: req.body.type, kind: t[0], title, levy, due, payout, status: 'Open', created: new Date().toISOString() };
-  db.cases.push(c); save(); res.json(c);
+// --- Photo fields: "Take photo" opens the camera, "Choose from gallery" opens the photo picker.
+function pickFile(inp) { if (inp.files && inp.files[0]) return inp.files[0]; const c = document.getElementById(inp.id + 'c'); return c && c.files && c.files[0]; }
+function resetPk() { document.querySelectorAll('.pk').forEach(i => i.value = ''); document.querySelectorAll('.pkrow small').forEach(s => s.textContent = ''); }
+document.addEventListener('click', e => { const b = e.target.closest('[data-cam]'); if (b) document.getElementById(b.dataset.cam).click(); });
+document.addEventListener('change', e => {
+  const i = e.target; if (!i.classList || !i.classList.contains('pk')) return;
+  const sib = document.getElementById(i.id === i.dataset.b ? i.dataset.b + 'c' : i.dataset.b);
+  if (i.files[0] && sib) sib.value = '';
+  const st = document.getElementById(i.dataset.b + 's'); if (st) st.textContent = i.files[0] ? '✓ Photo ready' : '';
 });
-app.post('/api/admin/cases/:id/close', admin('chairman'), (req, res) => { const c = db.cases.find(x => x.id === req.params.id); if (!c) return res.sendStatus(404); c.status = 'Closed'; save(); res.json(c); });
+// --- Coming back from the Leaders' Desk, Officials or Constitution pages: restore the session instead of asking to log in again.
+(async function restoreSession() {
+  let c = null, L = null;
+  try { c = JSON.parse(sessionStorage.getItem('mwe_cred') || 'null'); L = JSON.parse(sessionStorage.getItem('leader') || 'null'); } catch {}
+  if (!c && !(L && L.token)) return;
+  const want = (location.hash || '').replace('#', '');
+  if (c) { cred = c; try { await refresh(); } catch { cred = null; try { sessionStorage.removeItem('mwe_cred'); } catch {} } }
+  if (L && L.token) {
+    staffUser = L; $('sn').textContent = L.name; $('st').textContent = L.title;
+    $('sadmin').hidden = !L.admin; $('smem').hidden = !cred;
+    $('snOff').hidden = !L.admin; $('profLead').hidden = false; $('profOff').hidden = !L.admin;
+  }
+  if (!cred && !staffUser) return;
+  const memberViews = ['home', 'cases', 'help', 'prof', 'news', 'acct', 'dir', 'lead', 'stmt', 'pay', 'idup'];
+  let v = memberViews.includes(want) || want === 'staff' ? want : (staffUser ? 'staff' : 'home');
+  if (!cred && v !== 'staff' && v !== 'help') v = 'staff';
+  go(v);
+  if (cred) checkNew();
+  if (staffUser) loadGlance(staffUser);
+})();
 
-// --- Manual M-Pesa payments: member pays the welfare number, submits the confirmation code, Chairman approves.
-const PAY = { number: process.env.PAY_NUMBER || '0702681009', name: process.env.PAY_NAME || 'Edwin Njagi' };
-app.get('/api/config', (_, res) => res.json({ ...PAY, cats: LEDGER_CATS }));
-app.get('/api/leader/cases', admin('leader'), (_, res) => res.json(db.cases.map(c => ({ id: c.id, title: c.title, status: c.status })).reverse()));
-app.post('/api/pay', (req, res) => {
-  const phone = normPhone(req.body.phone), amount = Math.round(Number(req.body.amount)), code = String(req.body.code || '').trim().toUpperCase();
-  if (!phone) return res.status(400).json({ error: 'Enter the phone number you paid from.' });
-  if (!(amount >= 1 && amount <= 150000)) return res.status(400).json({ error: 'Enter a valid amount.' });
-  if (!/^[A-Z0-9]{10}$/.test(code)) return res.status(400).json({ error: 'M-Pesa code is 10 letters/numbers, e.g. SGH7K2L9QX.' });
-  if (db.payments.some(p => p.code === code)) return res.status(409).json({ error: 'This M-Pesa code was already submitted.' });
-  const c = req.body.caseId ? db.cases.find(x => x.id === req.body.caseId && x.status === 'Open') : null;
-  if (req.body.caseId && !c) return res.status(400).json({ error: 'That welfare case is closed or not found.' });
-  const member = db.members.find(m => phonesOf(m).includes(phone));
-  db.payments.push({ id: crypto.randomUUID(), caseId: c ? c.id : null, caseTitle: c ? c.title : 'General', expected: c ? owed(c) : null, code, phone, amount, member: member ? member.name : null, status: 'Pending', created: new Date().toISOString() }); save();
-  res.json({ message: 'Received. The Chairman will confirm your payment.' });
-});
-// Pending -> (Treasurer confirms) -> Awaiting Chairman -> (Chairman confirms) -> Paid. Either may reject.
-app.post('/api/admin/payments/:id/:action', admin('chairman', 'treasurer'), (req, res) => {
-  const p = db.payments.find(x => x.id === req.params.id), act = req.params.action;
-  if (!p) return res.sendStatus(404);
-  if (act === 'reject' && ['Pending', 'Awaiting Chairman'].includes(p.status)) { p.status = 'Failed'; p.rejectedBy = req.role; }
-  else if (act === 'confirm' && req.role === 'treasurer' && p.status === 'Pending') { p.status = 'Awaiting Chairman'; p.treasurerAt = new Date().toISOString(); }
-  else if (act === 'confirm' && req.role === 'chairman' && p.status === 'Awaiting Chairman') { p.status = 'Paid'; p.chairmanAt = new Date().toISOString(); }
-  else return res.status(400).json({ error: p.status === 'Pending' ? 'The Treasurer must confirm first.' : 'This action is not available for this payment.' });
-  save(); res.json(p);
-});
-
-loadDb().then(() => app.listen(process.env.PORT || 3000, () => console.log('MWEJUSTWO running'))).catch(e => { console.error('Startup failed (not starting with empty data):', e.message); process.exit(1); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {}); 
+</script>
+<script src="/branding.js"></script>
+</body>
+</html>
